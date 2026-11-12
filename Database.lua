@@ -1,0 +1,553 @@
+local addonName, PF = ...
+
+local defaults = {
+    theme = "verdant",
+    scale = 1,
+    locked = true,
+    replaceUnitFrames = true,
+    -- Keep boss replacement opt-in until Forever encounters are combat-tested.
+    replaceBossFrames = false,
+    replacePartyFrames = true,
+    replaceRaidFrames = true,
+    replaceNameplates = true,
+    enable3DPortraits = true,
+    mirrorPlayerTarget = false,
+    bossLayout = {
+        growUpwards = false,
+        independentPositioning = false,
+        auraMode = "mechanics",
+        aurasLeft = true,
+    },
+    partyLayout = {
+        scale = 1,
+        growUpwards = false,
+        sort = "index",
+        visibility = "auto",
+        aurasLeft = false,
+        useInSmallRaid = false,
+        hideInRaid = true,
+        rangeFade = true,
+        outOfRangeAlpha = 0.55,
+        showDebuffs = true,
+        showDispellableDebuffs = false,
+        showPredictions = true,
+        showMaintenance = false,
+        showThreat = true,
+        displayProfile = "balanced",
+    },
+    raidLayout = {
+        scale = 1,
+        visibility = "auto",
+        useInParty = false,
+        showHeaders = true,
+        independentPositioning = false,
+        sort = "index",
+        healthTextMode = "deficit",
+        accountForIncomingHeals = false,
+        showDebuffs = true,
+        showDispellableDebuffs = true,
+        showMaintenance = true,
+        showPredictions = true,
+        showHealAbsorbs = true,
+        showRoleIcons = true,
+        showLeadership = true,
+        showTargetHighlight = true,
+        showThreat = true,
+        maintenanceDuration = 120,
+        displayProfile = "balanced",
+    },
+}
+
+local function CopyPosition(position)
+    return { position[1], position[2], position[3], position[4], position[5] }
+end
+
+local function IsValidPosition(position)
+    return type(position) == "table"
+        and type(position[1]) == "string"
+        and type(position[2]) == "string"
+        and type(position[3]) == "string"
+        and type(position[4]) == "number"
+        and type(position[5]) == "number"
+end
+
+local function ReadBoolean(value, fallback)
+    if type(value) == "boolean" then return value end
+    return fallback
+end
+
+local function ReadAuraLimit(value)
+    if type(value) ~= "number" then return nil end
+    return math.max(0, math.min(PF.MAX_AURAS, math.floor(value + 0.5)))
+end
+
+local function ReadPartyUseInSmallRaid(layout)
+    if type(layout) ~= "table" then return defaults.partyLayout.useInSmallRaid end
+    if type(layout.useInSmallRaid) == "boolean" then return layout.useInSmallRaid end
+    return defaults.partyLayout.useInSmallRaid
+end
+
+local function ReadPartyHideInRaid(layout)
+    if type(layout) ~= "table" then return defaults.partyLayout.hideInRaid end
+    if type(layout.hideInRaid) == "boolean" then return layout.hideInRaid end
+    return defaults.partyLayout.hideInRaid
+end
+
+local function ReadPartyOutOfRangeAlpha(layout)
+    local alpha = type(layout) == "table" and layout.outOfRangeAlpha
+    if alpha == 0.35 or alpha == 0.55 or alpha == 0.75 then return alpha end
+    return defaults.partyLayout.outOfRangeAlpha
+end
+
+local function ReadPartyDisplayProfile(layout)
+    if type(layout) ~= "table" then return defaults.partyLayout.displayProfile end
+    local profile = layout.displayProfile
+    if profile == "balanced" or profile == "healer" or profile == "minimal"
+        or profile == "custom" then
+        return profile
+    end
+    return "custom"
+end
+
+local function NormalizeRaidGroupOffsets(savedOffsets)
+    local offsets = {}
+    for groupIndex = 1, 5 do
+        local saved = type(savedOffsets) == "table" and savedOffsets[groupIndex]
+        if type(saved) == "table" and type(saved[1]) == "number" and type(saved[2]) == "number" then
+            offsets[groupIndex] = { saved[1], saved[2] }
+        else
+            offsets[groupIndex] = { 0, 0 }
+        end
+    end
+    return offsets
+end
+
+local function CopyCastBarPositions(savedPositions)
+    local positions = {}
+    if type(savedPositions) ~= "table" then return positions end
+    for key, saved in pairs(savedPositions) do
+        if type(key) == "string" and type(saved) == "table"
+            and type(saved[1]) == "number" and type(saved[2]) == "number" then
+            positions[key] = { saved[1], saved[2] }
+        end
+    end
+    return positions
+end
+
+local function CopyThemePositions(theme, savedPositions)
+    local defaultPositions = assert(
+        theme.layout and theme.layout.screen and theme.layout.screen.positions,
+        "PrettyFrames theme is missing default screen positions"
+    )
+    local positions = {}
+    for key, defaultPosition in pairs(defaultPositions) do
+        local savedPosition = type(savedPositions) == "table" and savedPositions[key]
+        positions[key] = CopyPosition(IsValidPosition(savedPosition) and savedPosition or defaultPosition)
+    end
+    -- Independently positioned attached frames, such as Target-of-Target, do
+    -- not have a theme default anchor in this table. Preserve those additional
+    -- valid positions when copying or seeding a theme placement.
+    if type(savedPositions) == "table" then
+        for key, savedPosition in pairs(savedPositions) do
+            if positions[key] == nil and type(key) == "string" and IsValidPosition(savedPosition) then
+                positions[key] = CopyPosition(savedPosition)
+            end
+        end
+    end
+    return positions
+end
+
+local function ReadRaidHealthTextMode(layout)
+    local mode = type(layout) == "table" and layout.healthTextMode
+    if mode == "deficit" or mode == "percent" or mode == "currentmax" or mode == "none" then
+        return mode
+    end
+    return defaults.raidLayout.healthTextMode
+end
+
+local function ReadRaidDisplayProfile(layout)
+    if type(layout) ~= "table" then return defaults.raidLayout.displayProfile end
+    local profile = layout.displayProfile
+    if profile == "balanced" or profile == "healer" or profile == "tank"
+        or profile == "minimal" or profile == "custom" then
+        return profile
+    end
+    return "custom"
+end
+
+local function ReadMaintenanceDuration(layout)
+    local duration = type(layout) == "table" and layout.maintenanceDuration
+    if duration == 30 or duration == 60 or duration == 120 then return duration end
+    return defaults.raidLayout.maintenanceDuration
+end
+
+local function BuildProfile(self, previous)
+    previous = type(previous) == "table" and previous or {}
+    local selectedThemeId = type(previous.theme) == "string" and self.themes[previous.theme]
+        and previous.theme or defaults.theme
+    local selectedTheme = assert(self.themes[selectedThemeId], "PrettyFrames default theme is missing")
+    local database = {
+        theme = selectedThemeId,
+        scale = self:IsValidScale(previous.scale) and previous.scale or defaults.scale,
+        locked = type(previous.locked) == "boolean" and previous.locked or defaults.locked,
+        replaceUnitFrames = ReadBoolean(previous.replaceUnitFrames, defaults.replaceUnitFrames),
+        replaceBossFrames = ReadBoolean(previous.replaceBossFrames, defaults.replaceBossFrames),
+        replacePartyFrames = ReadBoolean(previous.replacePartyFrames, defaults.replacePartyFrames),
+        replaceRaidFrames = ReadBoolean(previous.replaceRaidFrames, defaults.replaceRaidFrames),
+        -- This setting defaults on; an explicit saved false must survive Lua's
+        -- `and/or` truthiness when the database is rebuilt.
+        replaceNameplates = previous.replaceNameplates ~= false,
+        enable3DPortraits = previous.enable3DPortraits ~= false,
+        mirrorPlayerTarget = type(previous.mirrorPlayerTarget) == "boolean"
+            and previous.mirrorPlayerTarget or defaults.mirrorPlayerTarget,
+        bossLayout = {
+            growUpwards = type(previous.bossLayout) == "table"
+                and previous.bossLayout.growUpwards == true or defaults.bossLayout.growUpwards,
+            independentPositioning = type(previous.bossLayout) == "table"
+                and previous.bossLayout.independentPositioning == true,
+            auraMode = type(previous.bossLayout) == "table"
+                and (previous.bossLayout.auraMode == "personal"
+                    or previous.bossLayout.auraMode == "hidden")
+                and previous.bossLayout.auraMode or defaults.bossLayout.auraMode,
+            aurasLeft = type(previous.bossLayout) ~= "table"
+                or previous.bossLayout.aurasLeft ~= false,
+        },
+        partyLayout = {
+            scale = self:IsValidScale(type(previous.partyLayout) == "table" and previous.partyLayout.scale)
+                and previous.partyLayout.scale or defaults.partyLayout.scale,
+            growUpwards = type(previous.partyLayout) == "table"
+                and previous.partyLayout.growUpwards == true or defaults.partyLayout.growUpwards,
+            sort = type(previous.partyLayout) == "table"
+                and (previous.partyLayout.sort == "role" or previous.partyLayout.sort == "name")
+                and previous.partyLayout.sort or defaults.partyLayout.sort,
+            visibility = type(previous.partyLayout) == "table"
+                and (previous.partyLayout.visibility == "show" or previous.partyLayout.visibility == "hide")
+                and previous.partyLayout.visibility or defaults.partyLayout.visibility,
+            aurasLeft = type(previous.partyLayout) == "table"
+                and previous.partyLayout.aurasLeft == true or defaults.partyLayout.aurasLeft,
+            useInSmallRaid = ReadPartyUseInSmallRaid(previous.partyLayout),
+            hideInRaid = ReadPartyHideInRaid(previous.partyLayout),
+            rangeFade = type(previous.partyLayout) ~= "table"
+                or previous.partyLayout.rangeFade ~= false,
+            outOfRangeAlpha = ReadPartyOutOfRangeAlpha(previous.partyLayout),
+            showDebuffs = type(previous.partyLayout) ~= "table"
+                or previous.partyLayout.showDebuffs ~= false,
+            showDispellableDebuffs = type(previous.partyLayout) == "table"
+                and previous.partyLayout.showDispellableDebuffs == true,
+            showPredictions = type(previous.partyLayout) ~= "table"
+                or previous.partyLayout.showPredictions ~= false,
+            showMaintenance = type(previous.partyLayout) == "table"
+                and previous.partyLayout.showMaintenance == true,
+            showThreat = type(previous.partyLayout) ~= "table"
+                or previous.partyLayout.showThreat ~= false,
+            displayProfile = ReadPartyDisplayProfile(previous.partyLayout),
+        },
+        raidLayout = {
+            scale = self:IsValidScale(type(previous.raidLayout) == "table" and previous.raidLayout.scale)
+                and previous.raidLayout.scale or defaults.raidLayout.scale,
+            visibility = type(previous.raidLayout) == "table"
+                and (previous.raidLayout.visibility == "show" or previous.raidLayout.visibility == "hide")
+                and previous.raidLayout.visibility or defaults.raidLayout.visibility,
+            useInParty = type(previous.raidLayout) == "table"
+                and previous.raidLayout.useInParty == true or defaults.raidLayout.useInParty,
+            showHeaders = type(previous.raidLayout) ~= "table"
+                or previous.raidLayout.showHeaders ~= false,
+            independentPositioning = type(previous.raidLayout) == "table"
+                and previous.raidLayout.independentPositioning == true
+                or defaults.raidLayout.independentPositioning,
+            sort = type(previous.raidLayout) == "table"
+                and (previous.raidLayout.sort == "role" or previous.raidLayout.sort == "name")
+                and previous.raidLayout.sort or defaults.raidLayout.sort,
+            healthTextMode = ReadRaidHealthTextMode(previous.raidLayout),
+            accountForIncomingHeals = type(previous.raidLayout) == "table"
+                and previous.raidLayout.accountForIncomingHeals == true,
+            showDebuffs = type(previous.raidLayout) ~= "table"
+                or previous.raidLayout.showDebuffs ~= false,
+            showDispellableDebuffs = type(previous.raidLayout) ~= "table"
+                or previous.raidLayout.showDispellableDebuffs ~= false,
+            showMaintenance = type(previous.raidLayout) ~= "table"
+                or previous.raidLayout.showMaintenance ~= false,
+            showPredictions = type(previous.raidLayout) ~= "table"
+                or previous.raidLayout.showPredictions ~= false,
+            showHealAbsorbs = type(previous.raidLayout) ~= "table"
+                or previous.raidLayout.showHealAbsorbs ~= false,
+            showRoleIcons = type(previous.raidLayout) ~= "table"
+                or previous.raidLayout.showRoleIcons ~= false,
+            showLeadership = type(previous.raidLayout) ~= "table"
+                or previous.raidLayout.showLeadership ~= false,
+            showTargetHighlight = type(previous.raidLayout) ~= "table"
+                or previous.raidLayout.showTargetHighlight ~= false,
+            showThreat = type(previous.raidLayout) ~= "table"
+                or previous.raidLayout.showThreat ~= false,
+            maintenanceDuration = ReadMaintenanceDuration(previous.raidLayout),
+            displayProfile = ReadRaidDisplayProfile(previous.raidLayout),
+            groupOffsets = {},
+        },
+        positions = {},
+        themePlacements = {},
+        frameSettings = {},
+    }
+
+    -- Named profiles are canonical presets. Any user-edited indicator marks
+    -- the profile Custom, so it is safe to reapply named profiles here and it
+    -- also migrates existing Tank users to the expanded Tank definition.
+    if self.ApplyRaidDisplayProfileOptions then
+        self:ApplyRaidDisplayProfileOptions(database.raidLayout, database.raidLayout.displayProfile)
+    end
+    if self.ApplyPartyDisplayProfileOptions then
+        self:ApplyPartyDisplayProfileOptions(database.partyLayout, database.partyLayout.displayProfile)
+    end
+
+    -- Frame anchors, independently moved Raid groups, and cast bars are scoped
+    -- to their theme. Existing profiles migrate into the theme currently used.
+    if type(previous.themePlacements) == "table" then
+        for themeId, placement in pairs(previous.themePlacements) do
+            local theme = type(themeId) == "string" and self.themes[themeId]
+            if theme and type(placement) == "table" then
+                database.themePlacements[themeId] = {
+                    positions = CopyThemePositions(theme, placement.positions),
+                    groupOffsets = NormalizeRaidGroupOffsets(placement.groupOffsets),
+                    castBarPositions = CopyCastBarPositions(placement.castBarPositions),
+                }
+            end
+        end
+    end
+
+    if not database.themePlacements[selectedThemeId] then
+        database.themePlacements[selectedThemeId] = {
+            positions = CopyThemePositions(selectedTheme, previous.positions),
+            groupOffsets = NormalizeRaidGroupOffsets(
+                type(previous.raidLayout) == "table" and previous.raidLayout.groupOffsets
+            ),
+            castBarPositions = {},
+        }
+    end
+    database.positions = database.themePlacements[selectedThemeId].positions
+    database.raidLayout.groupOffsets = database.themePlacements[selectedThemeId].groupOffsets
+
+    if type(previous.frameSettings) == "table" then
+        for key, setting in pairs(previous.frameSettings) do
+            if type(key) == "string" and type(setting) == "table" then
+                local visibility = setting.visibility
+                if visibility ~= "show" and visibility ~= "hide" then
+                    visibility = "auto"
+                end
+                database.frameSettings[key] = {
+                    visibility = visibility,
+                    flipped = setting.flipped == true,
+                    forceOneBar = setting.forceOneBar == true,
+                    showThreatGlow = setting.showThreatGlow ~= false,
+                    showPetThreat = setting.showPetThreat == true,
+                    threatTextMode = setting.threatTextMode == "aggro"
+                        and "aggro" or (setting.threatTextMode == "raw" and "raw" or "none"),
+                    buffsAbove = setting.buffsAbove == true,
+                    aurasLeft = setting.aurasLeft == true,
+                    hideCastBar = setting.hideCastBar == true,
+                    hidePetHappiness = setting.hidePetHappiness == true,
+                    petBarMode = setting.petBarMode == "healthOnly"
+                        and "healthOnly" or "healthPower",
+                    classResourceVisibility = setting.classResourceVisibility == "hidden"
+                        and "hidden" or "automatic",
+                    classResourceIndependent = setting.classResourceIndependent == true,
+                    classResourcePosition = type(setting.classResourcePosition) == "table"
+                        and type(setting.classResourcePosition[1]) == "number"
+                        and type(setting.classResourcePosition[2]) == "number"
+                        and { setting.classResourcePosition[1], setting.classResourcePosition[2] }
+                        or nil,
+                    castBarIndependent = setting.castBarIndependent == true,
+                    castBarPosition = database.themePlacements[selectedThemeId].castBarPositions[key],
+                    independentPositioning = setting.independentPositioning == true,
+                    scale = self:IsValidScale(setting.scale) and setting.scale or 1,
+                    maxBuffs = ReadAuraLimit(setting.maxBuffs),
+                    maxDebuffs = ReadAuraLimit(setting.maxDebuffs),
+                }
+            end
+        end
+    end
+
+    if self.InitializeActionsDatabase then
+        self:InitializeActionsDatabase(previous, database)
+    end
+
+    return database
+end
+
+local function TrimProfileName(name)
+    if type(name) ~= "string" then return "" end
+    return name:match("^%s*(.-)%s*$") or ""
+end
+
+local function ProfileNameExists(profiles, name, exceptName)
+    local folded = name:lower()
+    for existingName in pairs(profiles) do
+        if existingName ~= exceptName and existingName:lower() == folded then
+            return true
+        end
+    end
+    return false
+end
+
+function PF:GetCharacterProfileKey()
+    local characterName, characterRealm = UnitName("player")
+    characterName = characterName or "Unknown"
+    characterRealm = characterRealm or (GetRealmName and GetRealmName()) or "Unknown"
+    return characterName .. " - " .. characterRealm
+end
+
+function PF:InitializeDatabase()
+    local saved = type(PrettyFramesDB) == "table" and PrettyFramesDB or {}
+    local database = { profiles = {}, profileKeys = {} }
+    local hasProfileSchema = type(saved.profiles) == "table"
+        and type(saved.profileKeys) == "table"
+
+    if hasProfileSchema then
+        for name, profile in pairs(saved.profiles) do
+            if type(name) == "string" and name ~= "" and type(profile) == "table" then
+                database.profiles[name] = BuildProfile(self, profile)
+            end
+        end
+        for characterKey, profileName in pairs(saved.profileKeys) do
+            if type(characterKey) == "string" and type(profileName) == "string"
+                and database.profiles[profileName] then
+                database.profileKeys[characterKey] = profileName
+            end
+        end
+    end
+
+    if not database.profiles.Default then
+        database.profiles.Default = BuildProfile(self, {})
+    end
+
+    local characterKey = self:GetCharacterProfileKey()
+    local profileName = database.profileKeys[characterKey]
+    if not database.profiles[profileName] then profileName = "Default" end
+    database.profileKeys[characterKey] = profileName
+
+    PrettyFramesDB = database
+    self.database = database
+    self.profileName = profileName
+    self.db = database.profiles[profileName]
+end
+
+function PF:GetProfileNames()
+    local names = {}
+    -- Legacy UIDropDownMenu_Initialize can invoke its initializer while Lua
+    -- files are still loading, before ADDON_LOADED creates the database.
+    if not self.database or type(self.database.profiles) ~= "table" then
+        return names
+    end
+    for name in pairs(self.database.profiles) do
+        table.insert(names, name)
+    end
+    table.sort(names, function(a, b)
+        if a == "Default" then return true end
+        if b == "Default" then return false end
+        return a:lower() < b:lower()
+    end)
+    return names
+end
+
+function PF:GetCurrentProfileName()
+    return self.profileName or "Default"
+end
+
+function PF:IsProfileNameAvailable(name, exceptName)
+    name = TrimProfileName(name)
+    return name ~= "" and #name <= 64
+        and not ProfileNameExists(self.database.profiles, name, exceptName)
+end
+
+function PF:SetProfile(name)
+    if not self.database.profiles[name] then return false end
+    self.database.profileKeys[self:GetCharacterProfileKey()] = name
+    self.profileName = name
+    self.db = self.database.profiles[name]
+    return true
+end
+
+function PF:PrepareThemeChange(themeId)
+    local theme = type(themeId) == "string" and self.themes[themeId]
+    if not theme or not self.db then return false end
+
+    self.db.themePlacements = self.db.themePlacements or {}
+    local placement = self.db.themePlacements[themeId]
+    local sourcePlacement = self.db.themePlacements[self.db.theme]
+    if not placement then
+        -- The first visit to a theme starts exactly where the user left the
+        -- theme they are coming from. Later visits restore that theme's own
+        -- independently maintained placement.
+        placement = {
+            positions = CopyThemePositions(theme, self.db.positions),
+            groupOffsets = NormalizeRaidGroupOffsets(self.db.raidLayout and self.db.raidLayout.groupOffsets),
+            castBarPositions = CopyCastBarPositions(sourcePlacement and sourcePlacement.castBarPositions),
+        }
+        self.db.themePlacements[themeId] = placement
+    elseif not placement.castBarPositions then
+        -- Placements saved before cast bars became theme-aware are seeded on
+        -- their first visit under the new schema.
+        placement.castBarPositions = CopyCastBarPositions(
+            sourcePlacement and sourcePlacement.castBarPositions
+        )
+    end
+    if placement.positions and not placement.positions.targettarget
+        and self.db.positions and IsValidPosition(self.db.positions.targettarget) then
+        -- A theme placement may predate independent Target-of-Target support.
+        -- Seed that newly introduced coordinate from the theme being left.
+        placement.positions.targettarget = CopyPosition(self.db.positions.targettarget)
+    end
+
+    self.db.theme = themeId
+    self.db.positions = placement.positions
+    self.db.raidLayout.groupOffsets = placement.groupOffsets
+    placement.castBarPositions = placement.castBarPositions or {}
+    for key, setting in pairs(self.db.frameSettings or {}) do
+        setting.castBarPosition = placement.castBarPositions[key]
+    end
+    return true
+end
+
+function PF:CreateProfile(name)
+    name = TrimProfileName(name)
+    if not self:IsProfileNameAvailable(name) then return false end
+    self.database.profiles[name] = BuildProfile(self, {})
+    return self:SetProfile(name)
+end
+
+function PF:CopyProfile(sourceName)
+    local source = self.database.profiles[sourceName]
+    if not source or sourceName == self.profileName then return false end
+    self.database.profiles[self.profileName] = BuildProfile(self, source)
+    self.db = self.database.profiles[self.profileName]
+    return true
+end
+
+function PF:RenameProfile(name)
+    name = TrimProfileName(name)
+    local oldName = self.profileName
+    if oldName == "Default" or not self:IsProfileNameAvailable(name, oldName) then return false end
+    if name == oldName then return true end
+    self.database.profiles[name] = self.database.profiles[oldName]
+    self.database.profiles[oldName] = nil
+    for characterKey, profileName in pairs(self.database.profileKeys) do
+        if profileName == oldName then self.database.profileKeys[characterKey] = name end
+    end
+    self.profileName = name
+    return true
+end
+
+function PF:ResetProfile()
+    self.database.profiles[self.profileName] = BuildProfile(self, {})
+    self.db = self.database.profiles[self.profileName]
+end
+
+function PF:DeleteProfile(name)
+    if name == "Default" or name == self.profileName or not self.database.profiles[name] then
+        return false
+    end
+    self.database.profiles[name] = nil
+    for characterKey, profileName in pairs(self.database.profileKeys) do
+        if profileName == name then self.database.profileKeys[characterKey] = "Default" end
+    end
+    return true
+end
+

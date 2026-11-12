@@ -1,0 +1,40 @@
+## Interface: 16001
+## Title: PrettyFrames
+## Notes: Ornate, portrait-forward unit, party, and raid frames for WoW: Forever.
+## Author: PrettyFrames
+## Version: 0.31.0
+## SavedVariables: PrettyFramesDB
+## AllowLoadGameType: standard, camelot, forever
+## Dependencies: Blizzard_AuraContainer, Blizzard_NamePlates, Blizzard_UnitFrame, Blizzard_UIPanels_Game
+## OptionalDeps: Masque, Clique
+
+Core.lua
+Themes.lua
+Themes\Verdant\Data.lua
+Themes\Verdant\Frames.lua
+Themes\Verdant\Theme.lua
+Themes\Moonlight\Data.lua
+Themes\Moonlight\Frames.lua
+Themes\Moonlight\Theme.lua
+Themes\Orgrimmar\Data.lua
+Themes\Orgrimmar\Frames.lua
+Themes\Orgrimmar\Theme.lua
+Database.lua
+Actions.lua
+FrameSettings.lua
+ActionsUI.lua
+FrameWidgets.lua
+ClassResources.lua
+Auras.lua
+CastBars.lua
+UnitFrameData.lua
+OrnateUnitFrames.lua
+PlayerFrame.lua
+BossFrames.lua
+PartyFrames.lua
+RaidFrames.lua
+RaidFrameOptions.lua
+FrameController.lua
+Runtime.lua
+Nameplates.lua
+Options.lua

@@ -1,0 +1,11 @@
+# Generated CurseForge release artifacts
+/dist/
+
+# Local editor and operating-system files
+*.log
+*.tmp
+*.bak
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

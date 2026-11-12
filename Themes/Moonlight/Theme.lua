@@ -1,0 +1,3 @@
+local _, PF = ...
+
+PF:RegisterTheme("moonlight", {})
