@@ -122,7 +122,7 @@ function ThreatBehavior:UpdateUnitFrame(frame, exists, preview)
     if setting.showThreatGlow ~= false and not statusIsSecret then
         SetTargetThreatColor(frame, status)
         if status == 0 and PF:IsDisplaySafe(scaledPercentage) then
-            local progress = math.max(0, math.min(1, scaledPercentage / 100))
+            local progress = math.max(0, math.min(1, scaledPercentage / 50))
             frame.threatGlow.texture:SetAlpha(0.08 + progress * 0.38)
         end
         frame.threatGlow:Show()
