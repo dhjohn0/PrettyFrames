@@ -298,6 +298,113 @@ featuresPanel.OnCommit = function() end
 featuresPanel.OnDefault = function() StaticPopup_Show("PRETTYFRAMES_RESET_SETTINGS") end
 featuresPanel.OnRefresh = function() featuresPanel:Refresh() end
 
+local healthPanel = CreateFrame("Frame", "PrettyFramesHealthPanel")
+healthPanel:Hide()
+healthPanel.name = "Health"
+healthPanel.parent = "PrettyFrames"
+PF.healthPanel = healthPanel
+
+local healthTitle = healthPanel:CreateFontString(nil, "ARTWORK", "GameFontNormalHuge")
+healthTitle:SetPoint("TOPLEFT", 20, -20)
+healthTitle:SetText("PrettyFrames: Health")
+
+local healthSubtitle = healthPanel:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+healthSubtitle:SetPoint("TOPLEFT", healthTitle, "BOTTOMLEFT", 0, -8)
+healthSubtitle:SetWidth(620)
+healthSubtitle:SetJustifyH("LEFT")
+healthSubtitle:SetText(
+    "Configure nameplate health here. Unlock frames and right-click them to configure Player, Pet, Target, Focus, Party, Raid, and Boss health bars."
+)
+
+local nameplateHealthHeader = healthPanel:CreateFontString(
+    nil, "ARTWORK", "GameFontNormalLarge"
+)
+nameplateHealthHeader:SetPoint("TOPLEFT", healthSubtitle, "BOTTOMLEFT", 0, -28)
+nameplateHealthHeader:SetText("Nameplates")
+
+local function ChoiceLabel(choices, value)
+    for _, choice in ipairs(choices) do
+        if choice.id == value then return choice.label end
+    end
+    return tostring(value)
+end
+
+local function CreateHealthDropdown(name, label, y, choices, getValue, setValue)
+    local text = healthPanel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+    text:SetPoint("TOPLEFT", nameplateHealthHeader, "BOTTOMLEFT", 4, y)
+    text:SetText(label)
+
+    local dropdown = CreateFrame(
+        "Frame", name, healthPanel, "UIDropDownMenuTemplate"
+    )
+    dropdown:SetPoint("TOPLEFT", text, "BOTTOMLEFT", -16, -6)
+    UIDropDownMenu_SetWidth(dropdown, 220)
+    UIDropDownMenu_Initialize(dropdown, function()
+        for _, choice in ipairs(choices) do
+            local selected = choice
+            local info = UIDropDownMenu_CreateInfo()
+            info.text = selected.label
+            info.checked = getValue() == selected.id
+            info.func = function()
+                setValue(selected.id)
+                UIDropDownMenu_SetText(dropdown, selected.label)
+                if PF.RefreshNameplateHealth then PF:RefreshNameplateHealth() end
+            end
+            UIDropDownMenu_AddButton(info)
+        end
+    end)
+    dropdown.RefreshValue = function()
+        UIDropDownMenu_SetText(dropdown, ChoiceLabel(choices, getValue()))
+    end
+    return dropdown
+end
+
+local function NameplateHealthSetting()
+    if PF.db then return PF:GetFrameSetting("nameplate") end
+    -- UIDropDownMenu may invoke its initializer while Lua files are loading,
+    -- before ADDON_LOADED has created the active profile. Supplying display
+    -- defaults here keeps the rest of Options.lua (including slash commands)
+    -- available during that brief initialization window.
+    return {
+        healthTextMode = "currentmax",
+        healthColorMode = "unit",
+        healthBackgroundAlpha = 1,
+    }
+end
+
+local nameplateTextDropdown = CreateHealthDropdown(
+    "PrettyFramesNameplateHealthTextDropdown", "Health text", -16,
+    PF.HealthTextBehavior.textModes,
+    function() return NameplateHealthSetting().healthTextMode end,
+    function(value) NameplateHealthSetting().healthTextMode = value end
+)
+
+local nameplateColorDropdown = CreateHealthDropdown(
+    "PrettyFramesNameplateHealthColorDropdown", "Bar color", -100,
+    PF.HealthTextBehavior.colorModes,
+    function() return NameplateHealthSetting().healthColorMode end,
+    function(value) NameplateHealthSetting().healthColorMode = value end
+)
+
+local nameplateBackgroundDropdown = CreateHealthDropdown(
+    "PrettyFramesNameplateHealthBackgroundDropdown", "Background opacity", -184,
+    PF.HealthTextBehavior.backgroundAlphas,
+    function() return NameplateHealthSetting().healthBackgroundAlpha end,
+    function(value) NameplateHealthSetting().healthBackgroundAlpha = value end
+)
+
+function healthPanel:Refresh()
+    if not PF.db then return end
+    nameplateTextDropdown.RefreshValue()
+    nameplateColorDropdown.RefreshValue()
+    nameplateBackgroundDropdown.RefreshValue()
+end
+
+healthPanel:SetScript("OnShow", function(self) self:Refresh() end)
+healthPanel.OnCommit = function() end
+healthPanel.OnDefault = function() StaticPopup_Show("PRETTYFRAMES_RESET_SETTINGS") end
+healthPanel.OnRefresh = function() healthPanel:Refresh() end
+
 -- Register the established pages before constructing optional subpages. This
 -- keeps PrettyFrames available in Options even if a client-specific widget on
 -- a later page is unavailable.
@@ -306,9 +413,11 @@ if Settings and Settings.RegisterCanvasLayoutCategory then
     Settings.RegisterAddOnCategory(category)
     PF.optionsCategory = category
     PF.featuresCategory = Settings.RegisterCanvasLayoutSubcategory(category, featuresPanel, "Features")
+    PF.healthCategory = Settings.RegisterCanvasLayoutSubcategory(category, healthPanel, "Health")
 elseif InterfaceOptions_AddCategory then
     InterfaceOptions_AddCategory(panel)
     InterfaceOptions_AddCategory(featuresPanel)
+    InterfaceOptions_AddCategory(healthPanel)
 end
 
 local profilesPanel = CreateFrame("Frame", "PrettyFramesProfilesPanel")
@@ -654,6 +763,58 @@ local function ToggleEditTestModes()
         or "edit and test modes disabled.")
 end
 
+local function PrintRangeProbe()
+    if InCombatLockdown() then
+        PF:Print("run /pf range outside combat.")
+        return
+    end
+    if not UnitExists("target") then
+        PF:Print("target a unit, then run /pf range.")
+        return
+    end
+
+    local function Value(value)
+        if issecretvalue and issecretvalue(value) then return "secret" end
+        if value == nil then return "nil" end
+        return tostring(value)
+    end
+    local function SafeCall(callback)
+        local ok, first, second = pcall(callback)
+        if not ok then return "error", "nil" end
+        return Value(first), Value(second)
+    end
+
+    local isPlayer = SafeCall(function() return UnitIsUnit("target", "player") end)
+    local isPet = SafeCall(function() return UnitIsUnit("target", "pet") end)
+    local canAttack = SafeCall(function() return UnitCanAttack("player", "target") end)
+    local inRange, checkedRange = SafeCall(function() return UnitInRange("target") end)
+    local distanceSquared, checkedDistance = SafeCall(function()
+        return UnitDistanceSquared("target")
+    end)
+    local interactRange = SafeCall(function()
+        return UnitIsInInteractRange and UnitIsInInteractRange("target")
+    end)
+    local minimumRange, maximumRange = SafeCall(function()
+        return PF:GetUnitRangeBand("target")
+    end)
+    local meleeInteract, rangedInteract = "unavailable", "unavailable"
+    if CheckInteractDistance then
+        meleeInteract = SafeCall(function() return CheckInteractDistance("target", 3) end)
+        rangedInteract = SafeCall(function() return CheckInteractDistance("target", 4) end)
+    end
+    local setting = PF:GetFrameSetting("target")
+    local resolved = SafeCall(function()
+        return PF:GetUnitRangeState("target", setting.rangeDistance)
+    end)
+
+    PF:Print(("range mode=%s result=%s player=%s pet=%s attack=%s")
+        :format(setting.rangeDistance, resolved, isPlayer, isPet, canAttack))
+    PF:Print(("native in=%s checked=%s distance2=%s distanceChecked=%s interact=%s")
+        :format(inRange, checkedRange, distanceSquared, checkedDistance, interactRange))
+    PF:Print(("library band=%s-%s interact melee=%s ranged=%s")
+        :format(minimumRange, maximumRange, meleeInteract, rangedInteract))
+end
+
 SlashCmdList.PRETTYFRAMES = function(message)
     local command, argument = message:lower():match("^(%S*)%s*(.-)$")
     if command == "" or command == "options" or command == "config" then
@@ -664,6 +825,8 @@ SlashCmdList.PRETTYFRAMES = function(message)
         PF:SetLocked(not PF.db.locked)
     elseif command == "testedit" or command == "edittest" then
         ToggleEditTestModes()
+    elseif command == "range" or command == "rangeprobe" then
+        PrintRangeProbe()
     elseif command == "scale" then
         local scale = tonumber(argument)
         if not PF:IsValidScale(scale) then

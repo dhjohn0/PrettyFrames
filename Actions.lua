@@ -108,6 +108,14 @@ local secureHoverLeaveSnippet = [[
     self:ClearBindings()
 ]]
 
+local ActionBehavior = {
+    autoAttach = { groupFrame = true },
+    contextMenuScope = "move",
+    contextMenuOrder = 10,
+    refreshOnAttach = true,
+}
+PF.ActionBehavior = PF.FrameBehaviors:Register("actions", ActionBehavior)
+
 local function CopyAction(action)
     if type(action) ~= "table" then return nil end
     local copy = {}
@@ -631,22 +639,121 @@ function PF:ApplyActionsToFrame(frame)
     return true
 end
 
-function PF:RegisterActionFrame(frame, category)
-    if not frame or not self.ACTION_CATEGORIES[category] then return end
+function ActionBehavior:PrepareFrame(frame, category, attachment)
+    if not frame or not PF.ACTION_CATEGORIES[category] then return false end
     frame.actionCategory = category
-    self.actionFrames[frame] = true
+    if frame.prettyFramesActionsRegistered then return true end
+
+    if InCombatLockdown() then
+        local key = attachment and attachment.deferredPrepareKeys[frame]
+        if attachment and not key then
+            key = {}
+            attachment.deferredPrepareKeys[frame] = key
+        end
+        key = key or frame
+        PF.FrameBehaviors:RunOutOfCombat(self, key, function()
+            if attachment and attachment.detached then return false end
+            self:PrepareFrame(frame, category, attachment)
+            return PF:ApplyActionsToFrame(frame)
+        end, attachment)
+        return true
+    end
+
+    frame.prettyFramesActionsRegistered = true
     frame:SetAttribute("prettyframes-key-target", frame:GetName())
     frame:SetAttribute("_onenter", secureHoverEnterSnippet)
     frame:SetAttribute("_onleave", secureHoverLeaveSnippet)
     frame:SetAttribute("_onstate-prettyframescombat", secureCombatSnippet)
     RegisterStateDriver(frame, "prettyframescombat", "[combat] combat; nocombat")
-    self:ApplyActionsToFrame(frame)
+    return true
+end
+
+function ActionBehavior:ValidateAttachment(_, options)
+    assert(PF.ACTION_CATEGORIES[options.category],
+        "unknown action category: " .. tostring(options.category))
+end
+
+function ActionBehavior:ConfigureAttachment(attachment)
+    attachment.category = attachment.options.category
+    attachment.deferredPrepareKeys = attachment.deferredPrepareKeys
+        or setmetatable({}, { __mode = "k" })
+end
+
+function ActionBehavior:OnFrameAttached(attachment, frame)
+    return self:PrepareFrame(frame, attachment.category, attachment)
+end
+
+function ActionBehavior:OnFrameDetached(_, frame)
+    local function Cleanup()
+        if self.frameAttachments[frame] then return false end
+        ClearOverrideBindings(frame)
+        SetExternalFrameRegistration(frame, false)
+        ClearAppliedAttributes(frame)
+        if frame.prettyFramesActionsRegistered then
+            UnregisterStateDriver(frame, "prettyframescombat")
+            frame:SetAttribute("_onenter", nil)
+            frame:SetAttribute("_onleave", nil)
+            frame:SetAttribute("_onstate-prettyframescombat", nil)
+            frame:SetAttribute("prettyframes-key-target", nil)
+        end
+        frame.prettyFramesActionsRegistered = nil
+        frame.actionCategory = nil
+        return true
+    end
+    if InCombatLockdown() then
+        return PF.FrameBehaviors:RunOutOfCombat(self, frame, Cleanup)
+    end
+    return Cleanup()
+end
+
+function ActionBehavior:Apply(attachment)
+    if not attachment then return end
+    for _, frame in ipairs(self:SyncFrames(attachment)) do
+        PF:ApplyActionsToFrame(frame)
+    end
+end
+
+function ActionBehavior:RefreshCategory(category)
+    for frame, attachment in pairs(self.frameAttachments) do
+        if attachment.category == category then PF:ApplyActionsToFrame(frame) end
+    end
+end
+
+function ActionBehavior:RefreshAll()
+    if InCombatLockdown() then
+        return PF.FrameBehaviors:RunOutOfCombat(self, "refreshAll", function()
+            self:RefreshAll()
+        end)
+    end
+    PF.pendingActionBindings = nil
+    for _, attachment in ipairs(self.attachments) do self:Refresh(attachment) end
+    return true
+end
+
+function ActionBehavior:OnEditModeChanged()
+    self:RefreshAll()
+end
+
+function ActionBehavior:ForEachFrame(category, callback)
+    for frame, attachment in pairs(self.frameAttachments) do
+        if not category or attachment.category == category then callback(frame, attachment) end
+    end
+end
+
+function ActionBehavior:AddContextMenu(rootDescription, attachment)
+    rootDescription:CreateButton("Actions...", function()
+        PF:OpenActionsWindow(attachment.category)
+    end)
+    rootDescription:CreateDivider()
+end
+
+function PF:RegisterActionFrame(frame, category)
+    if not frame or not self.ACTION_CATEGORIES[category] then return end
+    return self.FrameBehaviors:Attach("actions", frame, { category = category })
 end
 
 function PF:ApplyActionCategory(category)
-    for frame in pairs(self.actionFrames) do
-        if frame.actionCategory == category then self:ApplyActionsToFrame(frame) end
-    end
+    self.ActionBehavior:RefreshCategory(category)
 end
 
 function PF:ApplyActionProfile(profileName)
@@ -656,13 +763,7 @@ function PF:ApplyActionProfile(profileName)
 end
 
 function PF:ApplyAllActionBindings()
-    if InCombatLockdown() then
-        self.pendingActionBindings = true
-        return false
-    end
-    self.pendingActionBindings = nil
-    for frame in pairs(self.actionFrames) do self:ApplyActionsToFrame(frame) end
-    return true
+    return self.ActionBehavior:RefreshAll()
 end
 
 function PF:DescribeActionBinding(binding)
@@ -739,30 +840,33 @@ function PF:GetActionConflictText(category)
                 .. " is already owned by native click casting."
         end
     end
-    for frame in pairs(self.actionFrames) do
-        if frame.actionCategory == category then
-            for _, binding in ipairs(profile.bindings or {}) do
-                if binding.input ~= "keyboard" then
-                    local attribute = AttributeBase(binding)
-                    local current = attribute and frame:GetAttribute(attribute)
-                    local owned = attribute and frame:GetAttribute("prettyframes-live-" .. attribute)
-                    if current ~= nil and current ~= owned then
-                        return "Conflict: " .. BindingCombinationLabel(binding)
-                            .. " is already owned by another click-casting provider."
-                    end
-                end
-            end
-            for attribute in pairs(frame.prettyFramesActionConflicts or {}) do
-                local prefix, suffix = attribute:match("^(.-)type(%d+)$")
-                if suffix then
-                    local modifier = prefix == "" and ""
-                        or prefix:gsub("%-", "+"):gsub("%+$", "") .. "+"
-                    local label = suffix == "1" and "Left Click" or suffix == "2" and "Right Click"
-                        or suffix == "3" and "Middle Click" or ("Mouse Button " .. suffix)
-                    return "Conflict: " .. modifier:gsub("^%l", string.upper) .. label
+    local conflict
+    self.ActionBehavior:ForEachFrame(category, function(frame)
+        if conflict then return end
+        for _, binding in ipairs(profile.bindings or {}) do
+            if binding.input ~= "keyboard" then
+                local attribute = AttributeBase(binding)
+                local current = attribute and frame:GetAttribute(attribute)
+                local owned = attribute and frame:GetAttribute("prettyframes-live-" .. attribute)
+                if current ~= nil and current ~= owned then
+                    conflict = "Conflict: " .. BindingCombinationLabel(binding)
                         .. " is already owned by another click-casting provider."
+                    return
                 end
             end
         end
-    end
+        for attribute in pairs(frame.prettyFramesActionConflicts or {}) do
+            local prefix, suffix = attribute:match("^(.-)type(%d+)$")
+            if suffix then
+                local modifier = prefix == "" and ""
+                    or prefix:gsub("%-", "+"):gsub("%+$", "") .. "+"
+                local label = suffix == "1" and "Left Click" or suffix == "2" and "Right Click"
+                    or suffix == "3" and "Middle Click" or ("Mouse Button " .. suffix)
+                conflict = "Conflict: " .. modifier:gsub("^%l", string.upper) .. label
+                    .. " is already owned by another click-casting provider."
+                return
+            end
+        end
+    end)
+    return conflict
 end

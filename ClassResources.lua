@@ -411,25 +411,6 @@ local function CreateDisplay(layout, globalName)
     holder.bar.text:SetTextColor(1, 0.96, 0.84)
     PF:ApplyBoldNumberFont(holder.bar.text, 9)
     holder.bar.ownerDisplay = holder
-    holder:SetMovable(true)
-    holder:SetClampedToScreen(true)
-    holder.bar:EnableMouse(not PF.db.locked)
-    holder.bar:RegisterForDrag("LeftButton")
-    holder.bar:SetScript("OnDragStart", function()
-        local setting = PF:GetFrameSetting("player")
-        if setting.classResourceIndependent and not PF.db.locked and not InCombatLockdown() then
-            holder:StartMoving()
-        end
-    end)
-    holder.bar:SetScript("OnDragStop", function()
-        holder:StopMovingOrSizing()
-        PF:SaveClassResourcePosition(holder)
-    end)
-    holder.bar:SetScript("OnMouseUp", function(_, mouseButton)
-        if mouseButton == "RightButton" and not PF.db.locked then
-            PF:OpenClassResourceContextMenu(holder)
-        end
-    end)
     holder.bar:Hide()
 
     holder.totems = {}
@@ -465,44 +446,6 @@ function PF:SaveClassResourcePosition(display)
     self:GetFrameSetting("player").classResourcePosition = { x - parentX, y - parentY }
 end
 
-function PF:OpenClassResourceContextMenu(display)
-    if InCombatLockdown() then return end
-    if not MenuUtil or not MenuUtil.CreateContextMenu then
-        self:Print("the class-resource menu is unavailable on this client build.")
-        return
-    end
-    if not display or not display.currentDefinition
-        or display.currentDefinition.kind ~= "bar" then return end
-
-    local setting = self:GetFrameSetting("player")
-    MenuUtil.CreateContextMenu(display.bar, function(_, rootDescription)
-        rootDescription:CreateTitle("Secondary Resource Bar")
-        rootDescription:CreateTitle("Positioning")
-        local function IsPositioningSelected(value)
-            return (setting.classResourceIndependent == true) == (value == "independent")
-        end
-        local function SetPositioning(value)
-            local independent = value == "independent"
-            if independent == (setting.classResourceIndependent == true) then return end
-            if independent then
-                -- Preserve the user's last independent location when the bar
-                -- is temporarily attached again. Seed it from the attached
-                -- position only the first time independent mode is enabled.
-                if not setting.classResourcePosition then
-                    PF:SaveClassResourcePosition(display)
-                end
-                setting.classResourceIndependent = true
-            else
-                PF:SaveClassResourcePosition(display)
-                setting.classResourceIndependent = false
-            end
-            PF:UpdateClassResourceDisplay(true)
-        end
-        rootDescription:CreateRadio("Attached to Frame", IsPositioningSelected, SetPositioning, "attached")
-        rootDescription:CreateRadio("Independent", IsPositioningSelected, SetPositioning, "independent")
-    end)
-end
-
 local function HideCustom(display)
     if not display then return end
     display:Hide()
@@ -524,6 +467,7 @@ local function SaveNativePlacement(frame)
 end
 
 local function RestoreNativeFrame(frame)
+    if InCombatLockdown() then return false end
     local placement = frame and frame.prettyFramesOriginalPlacement
     if not placement then return end
     pcall(frame.SetParent, frame, placement.parent)
@@ -533,16 +477,20 @@ local function RestoreNativeFrame(frame)
     end
     frame:SetAlpha(1)
     frame.prettyFramesUsedAsFallback = nil
+    return true
 end
 
 function PF:RestoreNativeClassResource()
+    if InCombatLockdown() then return false end
     if self.nativeClassResourceFrame then
         RestoreNativeFrame(self.nativeClassResourceFrame)
         self.nativeClassResourceFrame = nil
     end
+    return true
 end
 
 function PF:RestoreSuppressedClassResources()
+    if InCombatLockdown() then return false end
     self.customClassResourceActive = nil
     for frame in pairs(self.classResourceSuppressedFrames or {}) do
         if frame and frame.SetAlpha and not frame.prettyFramesUsedAsFallback then
@@ -550,6 +498,7 @@ function PF:RestoreSuppressedClassResources()
         end
     end
     self.classResourceSuppressedFrames = setmetatable({}, { __mode = "k" })
+    return true
 end
 
 function PF:SuppressNativeClassResource(definition)
@@ -578,6 +527,7 @@ function PF:SuppressNativeClassResource(definition)
 end
 
 function PF:TryNativeClassResource(definition)
+    if InCombatLockdown() then return false end
     if self.nativeClassResourceFrame and self.activeClassResource
         and self.activeClassResource.key == definition.key then
         return true
@@ -620,6 +570,7 @@ local function GetPointMaximum(display, definition, preview)
 end
 
 local function LayoutDisplay(display, definition, preview)
+    if InCombatLockdown() then return false end
     local layout = display.layout
     local owner = definition.attach == "target" and PF.frames.target or PF.frames.player
     if not owner then return false end
@@ -767,6 +718,9 @@ local function LayoutDisplay(display, definition, preview)
     display.bar.art:ClearAllPoints()
     display.bar.art:SetPoint("CENTER", display.bar, "CENTER")
     display.bar.art:SetSize(unpack(layout.barArtSize or layout.barSize))
+    display.prettyFramesLayoutDefinition = definition.key
+    display.prettyFramesLayoutOwner = owner
+    display.prettyFramesLayoutPreview = preview == true
     return true
 end
 
@@ -965,25 +919,59 @@ function PF:CreateClassResourceDisplay()
             self.classResourceDisplay,
             self.druidManaResourceDisplay,
         }
+        for _, display in ipairs(self.classResourceDisplays) do
+            local resourceDisplay = display
+            self.FrameBehaviors:Attach("attachedPosition", resourceDisplay, {
+                directContextMenu = true,
+                manageRegionMouse = true,
+                menuTitle = "Secondary Resource Bar",
+                getDragFrame = function() return resourceDisplay end,
+                getDragRegions = function() return { resourceDisplay.bar } end,
+                isMenuAvailable = function()
+                    return resourceDisplay.currentDefinition
+                        and resourceDisplay.currentDefinition.kind == "bar"
+                end,
+                isIndependent = function()
+                    return PF:GetFrameSetting("player").classResourceIndependent == true
+                end,
+                setIndependent = function(value)
+                    PF:GetFrameSetting("player").classResourceIndependent = value == true
+                end,
+                hasSavedPosition = function()
+                    return PF:GetFrameSetting("player").classResourcePosition ~= nil
+                end,
+                savePosition = function() PF:SaveClassResourcePosition(resourceDisplay) end,
+                applyPosition = function() return PF:UpdateClassResourceDisplay(true) end,
+            })
+        end
     end
-    self:UpdateClassResourceDisplay(true)
+    local player = self.frames and self.frames.player
+    if self.ClassResourceBehavior and player then
+        self.ClassResourceBehavior:RefreshSubject(player)
+    else
+        self:UpdateClassResourceDisplay(true)
+    end
 end
 
-local function RenderCustomResource(self, display, definition, preview)
+local function RenderCustomResource(self, display, definition, preview, applyLayout)
     local handled = display and display.layout.handled
         and display.layout.handled[definition.kind]
     if not handled then
-        HideCustom(display)
+        if applyLayout then HideCustom(display) end
         return false
     end
 
-    display.currentDefinition = definition
-    if not LayoutDisplay(display, definition, preview) then
-        HideCustom(display)
+    if applyLayout then
+        display.currentDefinition = definition
+        if not LayoutDisplay(display, definition, preview) then
+            return false
+        end
+        display:Show()
+        self:SuppressNativeClassResource(definition)
+    elseif not display.currentDefinition
+        or display.currentDefinition.key ~= definition.key then
         return false
     end
-    display:Show()
-    self:SuppressNativeClassResource(definition)
     display.bar:Hide()
     for index, segment in ipairs(display.segments) do
         segment:Hide()
@@ -1016,6 +1004,26 @@ function PF:UpdateClassResourceDisplay(force)
     local setting = self.db and self:GetFrameSetting("player")
     local enabled = self.db and self.db.replaceUnitFrames ~= false
         and setting and setting.classResourceVisibility ~= "hidden"
+    local display = self.classResourceDisplay
+    local handled = definition and display and display.layout.handled
+        and display.layout.handled[definition.kind]
+    local signature = enabled and definition and (
+        handled and (definition.key
+            .. (secondaryDefinition and ("+" .. secondaryDefinition.key) or ""))
+            or ("native:" .. definition.key)
+    ) or nil
+    local structuralChange = force == true
+        or self.activeClassResourceSignature ~= signature
+
+    if InCombatLockdown() and structuralChange then
+        self.deferredClassResourceLayoutKey = self.deferredClassResourceLayoutKey or {}
+        PF.FrameBehaviors:RunOutOfCombat(
+            self.ClassResourceBehavior,
+            self.deferredClassResourceLayoutKey,
+            function() return PF:UpdateClassResourceDisplay(true) end
+        )
+        return false
+    end
 
     if not enabled then
         HideCustom(self.classResourceDisplay)
@@ -1037,34 +1045,35 @@ function PF:UpdateClassResourceDisplay(force)
         return
     end
 
-    local display = self.classResourceDisplay
-    local handled = display and display.layout.handled
-        and display.layout.handled[definition.kind]
     if not handled then
-        HideCustom(display)
-        HideCustom(self.druidManaResourceDisplay)
-        self:TryNativeClassResource(definition)
+        if structuralChange then
+            HideCustom(display)
+            HideCustom(self.druidManaResourceDisplay)
+            self:TryNativeClassResource(definition)
+        end
         self.activeClassResource = definition
-        self.activeClassResourceSignature = definition.key
-        return
+        self.activeClassResourceSignature = signature
+        return true
     end
 
-    local signature = definition.key
-        .. (secondaryDefinition and ("+" .. secondaryDefinition.key) or "")
-    if self.activeClassResourceSignature ~= signature then
+    if structuralChange then
         self:RestoreNativeClassResource()
         self:RestoreSuppressedClassResources()
     end
-    if not RenderCustomResource(self, display, definition, preview) then return end
+    if not RenderCustomResource(
+        self, display, definition, preview, structuralChange
+    ) then return false end
     if secondaryDefinition then
         RenderCustomResource(
-            self, self.druidManaResourceDisplay, secondaryDefinition, preview
+            self, self.druidManaResourceDisplay, secondaryDefinition, preview,
+            structuralChange
         )
-    else
+    elseif structuralChange then
         HideCustom(self.druidManaResourceDisplay)
     end
     self.activeClassResource = definition
     self.activeClassResourceSignature = signature
+    return true
 end
 
 function PF:HandleClassResourceEvent(event, unit)
@@ -1094,5 +1103,13 @@ function PF:HandleClassResourceEvent(event, unit)
         and event ~= "PLAYER_TOTEM_UPDATE" then
         return
     end
-    self:UpdateClassResourceDisplay()
+    local structural = event == "PLAYER_ENTERING_WORLD"
+        or event == "PLAYER_SPECIALIZATION_CHANGED"
+        or event == "PLAYER_TALENT_UPDATE"
+        or event == "UPDATE_SHAPESHIFT_FORM"
+        or event == "UNIT_ENTERED_VEHICLE"
+        or event == "UNIT_EXITED_VEHICLE"
+        or event == "UNIT_DISPLAYPOWER"
+        or event == "PLAYER_EQUIPMENT_CHANGED"
+    self:UpdateClassResourceDisplay(structural)
 end

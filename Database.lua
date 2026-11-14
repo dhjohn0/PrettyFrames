@@ -17,6 +17,18 @@ local defaults = {
         independentPositioning = false,
         auraMode = "mechanics",
         aurasLeft = true,
+        rangeFade = true,
+        rangeDistance = "ranged",
+        outOfRangeAlpha = 0.55,
+        healthTextMode = "currentmax",
+        healthColorMode = "unit",
+        healthBackgroundAlpha = 1,
+        healthSpark = true,
+        forceOneBar = false,
+        powerTextMode = "currentmax",
+        powerColorMode = "type",
+        powerBackgroundAlpha = 1,
+        powerSpark = true,
     },
     partyLayout = {
         scale = 1,
@@ -27,12 +39,27 @@ local defaults = {
         useInSmallRaid = false,
         hideInRaid = true,
         rangeFade = true,
+        rangeDistance = "ranged",
         outOfRangeAlpha = 0.55,
         showDebuffs = true,
         showDispellableDebuffs = false,
         showPredictions = true,
         showMaintenance = false,
         showThreat = true,
+        showStatusText = true,
+        showRoleIcons = true,
+        showLeadership = true,
+        showTargetHighlight = true,
+        showRaidMarkers = true,
+        healthTextMode = "currentmax",
+        healthColorMode = "unit",
+        healthBackgroundAlpha = 1,
+        healthSpark = true,
+        powerTextMode = "currentmax",
+        powerColorMode = "type",
+        powerBackgroundAlpha = 1,
+        powerSpark = true,
+        accountForIncomingHeals = false,
         displayProfile = "balanced",
     },
     raidLayout = {
@@ -43,6 +70,9 @@ local defaults = {
         independentPositioning = false,
         sort = "index",
         healthTextMode = "deficit",
+        healthColorMode = "unit",
+        healthBackgroundAlpha = 1,
+        healthSpark = true,
         accountForIncomingHeals = false,
         showDebuffs = true,
         showDispellableDebuffs = true,
@@ -52,7 +82,12 @@ local defaults = {
         showRoleIcons = true,
         showLeadership = true,
         showTargetHighlight = true,
+        showStatusText = true,
+        showRaidMarkers = true,
         showThreat = true,
+        rangeFade = true,
+        rangeDistance = "ranged",
+        outOfRangeAlpha = 0.55,
         maintenanceDuration = 120,
         displayProfile = "balanced",
     },
@@ -93,10 +128,15 @@ local function ReadPartyHideInRaid(layout)
     return defaults.partyLayout.hideInRaid
 end
 
-local function ReadPartyOutOfRangeAlpha(layout)
-    local alpha = type(layout) == "table" and layout.outOfRangeAlpha
+local function ReadOutOfRangeAlpha(options, fallback)
+    local alpha = type(options) == "table" and options.outOfRangeAlpha
     if alpha == 0.35 or alpha == 0.55 or alpha == 0.75 then return alpha end
-    return defaults.partyLayout.outOfRangeAlpha
+    return fallback or defaults.partyLayout.outOfRangeAlpha
+end
+
+local function ReadRangeDistance(options)
+    return type(options) == "table" and options.rangeDistance == "melee"
+        and "melee" or "ranged"
 end
 
 local function ReadPartyDisplayProfile(layout)
@@ -157,12 +197,52 @@ local function CopyThemePositions(theme, savedPositions)
     return positions
 end
 
-local function ReadRaidHealthTextMode(layout)
+local function ReadHealthTextMode(layout, fallback)
     local mode = type(layout) == "table" and layout.healthTextMode
-    if mode == "deficit" or mode == "percent" or mode == "currentmax" or mode == "none" then
+    if mode == "deficit" or mode == "percent" or mode == "current"
+        or mode == "maximum" or mode == "currentmax"
+        or mode == "currentpercent" or mode == "none" then
         return mode
     end
-    return defaults.raidLayout.healthTextMode
+    return fallback
+end
+
+local function ReadHealthColorMode(options, fallback)
+    local mode = type(options) == "table" and options.healthColorMode
+    if mode == "unit" or mode == "class" or mode == "reaction"
+        or mode == "gradient" or mode == "green" then return mode end
+    return fallback or "unit"
+end
+
+local function ReadHealthBackgroundAlpha(options, fallback)
+    local alpha = type(options) == "table" and options.healthBackgroundAlpha
+    if alpha == 0 or alpha == 0.25 or alpha == 0.5
+        or alpha == 0.75 or alpha == 1 then return alpha end
+    return fallback or 1
+end
+
+local function ReadPowerTextMode(options, fallback)
+    local mode = type(options) == "table" and options.powerTextMode
+    if mode == "current" or mode == "maximum" or mode == "currentmax"
+        or mode == "percent" or mode == "currentpercent"
+        or mode == "none" then return mode end
+    return fallback or "currentmax"
+end
+
+local function ReadPowerColorMode(options, fallback)
+    local mode = type(options) == "table" and options.powerColorMode
+    if mode == "type" or mode == "class" or mode == "gradient"
+        or mode == "theme" or mode == "red" or mode == "yellow" then
+        return mode
+    end
+    return fallback or "type"
+end
+
+local function ReadPowerBackgroundAlpha(options, fallback)
+    local alpha = type(options) == "table" and options.powerBackgroundAlpha
+    if alpha == 0 or alpha == 0.25 or alpha == 0.5
+        or alpha == 0.75 or alpha == 1 then return alpha end
+    return fallback or 1
 end
 
 local function ReadRaidDisplayProfile(layout)
@@ -211,6 +291,37 @@ local function BuildProfile(self, previous)
                 and previous.bossLayout.auraMode or defaults.bossLayout.auraMode,
             aurasLeft = type(previous.bossLayout) ~= "table"
                 or previous.bossLayout.aurasLeft ~= false,
+            rangeFade = type(previous.bossLayout) ~= "table"
+                or previous.bossLayout.rangeFade ~= false,
+            rangeDistance = ReadRangeDistance(previous.bossLayout),
+            outOfRangeAlpha = ReadOutOfRangeAlpha(
+                previous.bossLayout,
+                defaults.bossLayout.outOfRangeAlpha
+            ),
+            healthTextMode = ReadHealthTextMode(
+                previous.bossLayout, defaults.bossLayout.healthTextMode
+            ),
+            healthColorMode = ReadHealthColorMode(
+                previous.bossLayout, defaults.bossLayout.healthColorMode
+            ),
+            healthBackgroundAlpha = ReadHealthBackgroundAlpha(
+                previous.bossLayout, defaults.bossLayout.healthBackgroundAlpha
+            ),
+            healthSpark = type(previous.bossLayout) ~= "table"
+                or previous.bossLayout.healthSpark ~= false,
+            forceOneBar = type(previous.bossLayout) == "table"
+                and previous.bossLayout.forceOneBar == true,
+            powerTextMode = ReadPowerTextMode(
+                previous.bossLayout, defaults.bossLayout.powerTextMode
+            ),
+            powerColorMode = ReadPowerColorMode(
+                previous.bossLayout, defaults.bossLayout.powerColorMode
+            ),
+            powerBackgroundAlpha = ReadPowerBackgroundAlpha(
+                previous.bossLayout, defaults.bossLayout.powerBackgroundAlpha
+            ),
+            powerSpark = type(previous.bossLayout) ~= "table"
+                or previous.bossLayout.powerSpark ~= false,
         },
         partyLayout = {
             scale = self:IsValidScale(type(previous.partyLayout) == "table" and previous.partyLayout.scale)
@@ -229,7 +340,8 @@ local function BuildProfile(self, previous)
             hideInRaid = ReadPartyHideInRaid(previous.partyLayout),
             rangeFade = type(previous.partyLayout) ~= "table"
                 or previous.partyLayout.rangeFade ~= false,
-            outOfRangeAlpha = ReadPartyOutOfRangeAlpha(previous.partyLayout),
+            rangeDistance = ReadRangeDistance(previous.partyLayout),
+            outOfRangeAlpha = ReadOutOfRangeAlpha(previous.partyLayout),
             showDebuffs = type(previous.partyLayout) ~= "table"
                 or previous.partyLayout.showDebuffs ~= false,
             showDispellableDebuffs = type(previous.partyLayout) == "table"
@@ -240,6 +352,40 @@ local function BuildProfile(self, previous)
                 and previous.partyLayout.showMaintenance == true,
             showThreat = type(previous.partyLayout) ~= "table"
                 or previous.partyLayout.showThreat ~= false,
+            showStatusText = type(previous.partyLayout) ~= "table"
+                or previous.partyLayout.showStatusText ~= false,
+            showRoleIcons = type(previous.partyLayout) ~= "table"
+                or previous.partyLayout.showRoleIcons ~= false,
+            showLeadership = type(previous.partyLayout) ~= "table"
+                or previous.partyLayout.showLeadership ~= false,
+            showTargetHighlight = type(previous.partyLayout) ~= "table"
+                or previous.partyLayout.showTargetHighlight ~= false,
+            showRaidMarkers = type(previous.partyLayout) ~= "table"
+                or previous.partyLayout.showRaidMarkers ~= false,
+            healthTextMode = ReadHealthTextMode(
+                previous.partyLayout, defaults.partyLayout.healthTextMode
+            ),
+            healthColorMode = ReadHealthColorMode(
+                previous.partyLayout, defaults.partyLayout.healthColorMode
+            ),
+            healthBackgroundAlpha = ReadHealthBackgroundAlpha(
+                previous.partyLayout, defaults.partyLayout.healthBackgroundAlpha
+            ),
+            healthSpark = type(previous.partyLayout) ~= "table"
+                or previous.partyLayout.healthSpark ~= false,
+            powerTextMode = ReadPowerTextMode(
+                previous.partyLayout, defaults.partyLayout.powerTextMode
+            ),
+            powerColorMode = ReadPowerColorMode(
+                previous.partyLayout, defaults.partyLayout.powerColorMode
+            ),
+            powerBackgroundAlpha = ReadPowerBackgroundAlpha(
+                previous.partyLayout, defaults.partyLayout.powerBackgroundAlpha
+            ),
+            powerSpark = type(previous.partyLayout) ~= "table"
+                or previous.partyLayout.powerSpark ~= false,
+            accountForIncomingHeals = type(previous.partyLayout) == "table"
+                and previous.partyLayout.accountForIncomingHeals == true,
             displayProfile = ReadPartyDisplayProfile(previous.partyLayout),
         },
         raidLayout = {
@@ -258,7 +404,17 @@ local function BuildProfile(self, previous)
             sort = type(previous.raidLayout) == "table"
                 and (previous.raidLayout.sort == "role" or previous.raidLayout.sort == "name")
                 and previous.raidLayout.sort or defaults.raidLayout.sort,
-            healthTextMode = ReadRaidHealthTextMode(previous.raidLayout),
+            healthTextMode = ReadHealthTextMode(
+                previous.raidLayout, defaults.raidLayout.healthTextMode
+            ),
+            healthColorMode = ReadHealthColorMode(
+                previous.raidLayout, defaults.raidLayout.healthColorMode
+            ),
+            healthBackgroundAlpha = ReadHealthBackgroundAlpha(
+                previous.raidLayout, defaults.raidLayout.healthBackgroundAlpha
+            ),
+            healthSpark = type(previous.raidLayout) ~= "table"
+                or previous.raidLayout.healthSpark ~= false,
             accountForIncomingHeals = type(previous.raidLayout) == "table"
                 and previous.raidLayout.accountForIncomingHeals == true,
             showDebuffs = type(previous.raidLayout) ~= "table"
@@ -277,8 +433,19 @@ local function BuildProfile(self, previous)
                 or previous.raidLayout.showLeadership ~= false,
             showTargetHighlight = type(previous.raidLayout) ~= "table"
                 or previous.raidLayout.showTargetHighlight ~= false,
+            showStatusText = type(previous.raidLayout) ~= "table"
+                or previous.raidLayout.showStatusText ~= false,
+            showRaidMarkers = type(previous.raidLayout) ~= "table"
+                or previous.raidLayout.showRaidMarkers ~= false,
             showThreat = type(previous.raidLayout) ~= "table"
                 or previous.raidLayout.showThreat ~= false,
+            rangeFade = type(previous.raidLayout) ~= "table"
+                or previous.raidLayout.rangeFade ~= false,
+            rangeDistance = ReadRangeDistance(previous.raidLayout),
+            outOfRangeAlpha = ReadOutOfRangeAlpha(
+                previous.raidLayout,
+                defaults.raidLayout.outOfRangeAlpha
+            ),
             maintenanceDuration = ReadMaintenanceDuration(previous.raidLayout),
             displayProfile = ReadRaidDisplayProfile(previous.raidLayout),
             groupOffsets = {},
@@ -340,12 +507,23 @@ local function BuildProfile(self, previous)
                     showPetThreat = setting.showPetThreat == true,
                     threatTextMode = setting.threatTextMode == "aggro"
                         and "aggro" or (setting.threatTextMode == "raw" and "raw" or "none"),
+                    healthTextMode = ReadHealthTextMode(setting, "currentmax"),
+                    healthColorMode = ReadHealthColorMode(setting, "unit"),
+                    healthBackgroundAlpha = ReadHealthBackgroundAlpha(setting, 1),
+                    healthSpark = setting.healthSpark ~= false,
+                    powerTextMode = ReadPowerTextMode(setting, "currentmax"),
+                    powerColorMode = ReadPowerColorMode(setting, "type"),
+                    powerBackgroundAlpha = ReadPowerBackgroundAlpha(setting, 1),
+                    powerSpark = setting.powerSpark ~= false,
                     buffsAbove = setting.buffsAbove == true,
                     aurasLeft = setting.aurasLeft == true,
                     hideCastBar = setting.hideCastBar == true,
                     hidePetHappiness = setting.hidePetHappiness == true,
                     petBarMode = setting.petBarMode == "healthOnly"
                         and "healthOnly" or "healthPower",
+                    rangeFade = setting.rangeFade ~= false,
+                    rangeDistance = ReadRangeDistance(setting),
+                    outOfRangeAlpha = ReadOutOfRangeAlpha(setting),
                     classResourceVisibility = setting.classResourceVisibility == "hidden"
                         and "hidden" or "automatic",
                     classResourceIndependent = setting.classResourceIndependent == true,

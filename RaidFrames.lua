@@ -3,139 +3,12 @@ local _, PF = ...
 local themeLayout = PF:ThemeLayout("raid")
 
 local CreateRoleIndicator = PF.Widgets.CreateRoleIndicator
-local SetPartyRole = PF.Widgets.SetPartyRole
 local SetSecureUnit = PF.Widgets.SetSecureUnit
 local CreateRaidDebuffContainer = PF.Auras.CreateRaidDebuffContainer
 local CreateRaidMaintenanceContainer = PF.Auras.CreateRaidMaintenanceContainer
-local RAID_ALPHA_OUT_OF_RANGE = 0.58
 local RAID_ALPHA_UNAVAILABLE = 0.34
 local SetAvailabilityAlpha = PF.Widgets.SetAvailabilityAlpha
 local SetRangeAlpha = PF.Widgets.SetRangeAlpha
-
-local raidPercentCurve
-if C_CurveUtil and C_CurveUtil.CreateCurve then
-    raidPercentCurve = C_CurveUtil.CreateCurve()
-    raidPercentCurve:AddPoint(0, 0)
-    raidPercentCurve:AddPoint(1, 100)
-end
-
-local predictionCalculator
-if CreateUnitHealPredictionCalculator and UnitGetDetailedHealPrediction then
-    local ok, calculator = pcall(CreateUnitHealPredictionCalculator)
-    if ok and calculator then
-        predictionCalculator = calculator
-        if Enum and Enum.UnitMaximumHealthMode then
-            calculator:SetMaximumHealthMode(Enum.UnitMaximumHealthMode.Default)
-            calculator:SetIncomingHealClampMode(Enum.UnitIncomingHealClampMode.MissingHealth)
-            calculator:SetIncomingHealOverflowPercent(1)
-            calculator:SetDamageAbsorbClampMode(Enum.UnitDamageAbsorbClampMode.MissingHealth)
-            calculator:SetHealAbsorbClampMode(Enum.UnitHealAbsorbClampMode.CurrentHealth)
-            calculator:SetHealAbsorbMode(Enum.UnitHealAbsorbMode.ReducedByIncomingHeals)
-        end
-    end
-end
-
-local function CreatePredictionSegment(parent, healthBar, red, green, blue, alpha, texturePath)
-    local segment = CreateFrame("StatusBar", nil, parent)
-    if segment.SetUsingParentLevel then segment:SetUsingParentLevel(true) end
-    segment:SetStatusBarTexture(
-        texturePath or PF:ThemeFrameAsset("raid", "statusBar", "statusBar")
-    )
-    segment:SetStatusBarColor(red, green, blue, alpha)
-    segment:SetMinMaxValues(0, 1)
-    segment:SetValue(0)
-    segment:SetWidth(math.max(1, healthBar:GetWidth()))
-    local texture = segment:GetStatusBarTexture()
-    if texture and texture.SetDrawLayer then texture:SetDrawLayer("ARTWORK", 2) end
-    segment.fill = texture
-    segment:Hide()
-    return segment
-end
-
-local function AttachPredictionSegment(segment, relative, relativeSide, reverse)
-    local side = reverse and "RIGHT" or "LEFT"
-    segment:ClearAllPoints()
-    segment:SetPoint("TOP" .. side, relative, "TOP" .. relativeSide)
-    segment:SetPoint("BOTTOM" .. side, relative, "BOTTOM" .. relativeSide)
-    segment:SetReverseFill(reverse == true)
-end
-
-local function LayoutGroupHealPrediction(frame, reversed)
-    local prediction = frame and frame.groupPrediction
-    if not prediction then return end
-    local fill = prediction.healthFill
-    if reversed then
-        AttachPredictionSegment(prediction.myHeals, fill, "LEFT", true)
-        AttachPredictionSegment(prediction.otherHeals, prediction.myHeals.fill, "LEFT", true)
-        AttachPredictionSegment(prediction.absorbs, prediction.otherHeals.fill, "LEFT", true)
-        AttachPredictionSegment(prediction.healAbsorbs, fill, "LEFT", false)
-    else
-        AttachPredictionSegment(prediction.myHeals, fill, "RIGHT", false)
-        AttachPredictionSegment(prediction.otherHeals, prediction.myHeals.fill, "RIGHT", false)
-        AttachPredictionSegment(prediction.absorbs, prediction.otherHeals.fill, "RIGHT", false)
-        AttachPredictionSegment(prediction.healAbsorbs, fill, "RIGHT", true)
-    end
-end
-
-local function CreateGroupHealPrediction(frame, geometry)
-    local health = frame.health
-    local fill = health:GetStatusBarTexture()
-    local insets = geometry and geometry.predictionInsets or { 0, 0, 0, 0 }
-    local clip = CreateFrame("Frame", nil, health)
-    clip:SetPoint("TOPLEFT", health, "TOPLEFT", insets[1] or 0, -(insets[3] or 0))
-    clip:SetPoint("BOTTOMRIGHT", health, "BOTTOMRIGHT", -(insets[2] or 0), insets[4] or 0)
-    if clip.SetClipsChildren then clip:SetClipsChildren(true) end
-    clip:EnableMouse(false)
-    local prediction = {
-        clip = clip,
-        healthFill = fill,
-        myHeals = CreatePredictionSegment(clip, health, 0.08, 0.95, 1.00, 0.90),
-        otherHeals = CreatePredictionSegment(clip, health, 0.02, 0.68, 0.82, 0.85),
-        absorbs = CreatePredictionSegment(clip, health, 0.30, 0.70, 1.00, 0.82),
-        healAbsorbs = CreatePredictionSegment(clip, health, 0.72, 0.04, 0.22, 0.92),
-    }
-    prediction.segments = {
-        prediction.myHeals, prediction.otherHeals, prediction.absorbs, prediction.healAbsorbs,
-    }
-
-    local stripes = prediction.absorbs:CreateTexture(nil, "ARTWORK", nil, 3)
-    stripes:SetTexture("Interface\\RaidFrame\\Shield-Overlay", "REPEAT", "REPEAT")
-    stripes:SetHorizTile(true)
-    stripes:SetVertTile(true)
-    stripes:SetAllPoints(prediction.absorbs.fill)
-    prediction.absorbStripes = stripes
-
-    clip:HookScript("OnSizeChanged", function(_, width)
-        for _, segment in ipairs(prediction.segments) do
-            segment:SetWidth(math.max(1, width))
-        end
-    end)
-    frame.groupPrediction = prediction
-    LayoutGroupHealPrediction(frame, frame.isMirrored == true)
-    return prediction
-end
-
-local function HideGroupHealPrediction(frame)
-    local prediction = frame and frame.groupPrediction
-    if not prediction then return end
-    for _, segment in ipairs(prediction.segments) do
-        segment:SetMinMaxValues(0, 1)
-        segment:SetValue(0)
-        segment:Hide()
-    end
-end
-
-function PF:CreateGroupHealPrediction(frame, geometry)
-    return CreateGroupHealPrediction(frame, geometry)
-end
-
-function PF:LayoutGroupHealPrediction(frame, reversed)
-    LayoutGroupHealPrediction(frame, reversed)
-end
-
-function PF:HideGroupHealPrediction(frame)
-    HideGroupHealPrediction(frame)
-end
 
 local function SetRaidAvailabilityAlpha(frame, alpha)
     SetAvailabilityAlpha(frame, alpha)
@@ -144,8 +17,8 @@ local function SetRaidAvailabilityAlpha(frame, alpha)
     frame.raidAvailabilityAlpha = alpha
 end
 
-local function SetRaidRangeAlpha(frame, inRange)
-    SetRangeAlpha(frame, inRange, RAID_ALPHA_OUT_OF_RANGE)
+local function SetRaidRangeAlpha(frame, inRange, outOfRangeAlpha)
+    SetRangeAlpha(frame, inRange, outOfRangeAlpha)
     frame.raidAvailabilityAlpha = frame.availabilityAlpha
 end
 
@@ -155,8 +28,6 @@ local partyRoleSortOrder = {
     DAMAGER = 3,
     NONE = 4,
 }
-
-local SetRaidMarkerTexture = PF.Widgets.SetRaidMarkerTexture
 
 local function SetRaidAccent(frame, red, green, blue, alpha)
     local shown = red ~= nil
@@ -185,130 +56,6 @@ function PF:SetRaidStatusText(frame, text)
     UpdateRaidTextVisibility(frame)
 end
 
-local function GetRaidIncomingHeals(frame, healthMax, testMode)
-    if testMode then
-        local previewIndex = tonumber(frame.unit and frame.unit:match("%d+"))
-        return previewIndex == 15 and healthMax * 0.22 or 0
-    end
-    if predictionCalculator and UnitExists(frame.unit) then
-        UnitGetDetailedHealPrediction(frame.unit, "player", predictionCalculator)
-        return predictionCalculator:GetIncomingHeals()
-    end
-end
-
-function PF:UpdateRaidHealthText(frame, health, healthMax)
-    if not frame or not frame.healthText then return end
-    local options = self.db and self.db.raidLayout
-    local mode = options and options.healthTextMode or "deficit"
-    local text
-
-    if mode == "deficit" then
-        local accountedForIncomingHeals = false
-        if options and options.accountForIncomingHeals == true
-            and self:IsDisplaySafe(health) and self:IsDisplaySafe(healthMax) then
-            local incomingHeals = GetRaidIncomingHeals(frame, healthMax, self.testMode)
-            if self:IsDisplaySafe(incomingHeals) then
-                local missingHealth = math.max(0, healthMax - health - incomingHeals)
-                text = missingHealth > 0 and "-" .. self:FormatNumber(missingHealth) or nil
-                accountedForIncomingHeals = true
-            end
-        end
-
-        if accountedForIncomingHeals then
-            -- The projected deficit was calculated above. A fully covered
-            -- deficit intentionally leaves the text blank.
-        elseif not self.testMode and UnitHealthMissing and C_StringUtil and C_StringUtil.WrapString
-            and C_StringUtil.TruncateWhenZero then
-            frame.healthText:SetText(C_StringUtil.WrapString(
-                C_StringUtil.TruncateWhenZero(UnitHealthMissing(frame.unit)), "-"
-            ))
-            frame.raidHealthTextHasValue = true
-            UpdateRaidTextVisibility(frame)
-            return
-        elseif self:IsDisplaySafe(health) and self:IsDisplaySafe(healthMax) and healthMax > health then
-            text = "-" .. self:FormatNumber(healthMax - health)
-        end
-    elseif mode == "percent" then
-        if not self.testMode and UnitHealthPercent and raidPercentCurve and C_StringUtil
-            and C_StringUtil.RoundToNearestString then
-            frame.healthText:SetText(C_StringUtil.RoundToNearestString(
-                UnitHealthPercent(frame.unit, true, raidPercentCurve)
-            ) .. "%")
-            frame.raidHealthTextHasValue = true
-            UpdateRaidTextVisibility(frame)
-            return
-        elseif self:IsDisplaySafe(health) and self:IsDisplaySafe(healthMax) and healthMax > 0 then
-            text = math.floor((health / healthMax) * 100 + 0.5) .. "%"
-        end
-    elseif mode == "currentmax" then
-        local currentText = self:FormatNumber(health)
-        local maxText = self:FormatNumber(healthMax)
-        if currentText and maxText then
-            local incomingText
-            if options and options.accountForIncomingHeals == true then
-                local incomingHeals = GetRaidIncomingHeals(frame, healthMax, self.testMode)
-                if self:IsDisplaySafe(incomingHeals) and incomingHeals > 0 then
-                    incomingText = self:FormatNumber(incomingHeals)
-                end
-            end
-            text = currentText .. (incomingText and " (+" .. incomingText .. ")" or "")
-                .. " / " .. maxText
-        else
-            frame.healthText:SetFormattedText("%s / %s", health, healthMax)
-            frame.raidHealthTextHasValue = true
-            UpdateRaidTextVisibility(frame)
-            return
-        end
-    end
-
-    frame.healthText:SetText(text or "")
-    frame.raidHealthTextHasValue = text ~= nil and text ~= ""
-    UpdateRaidTextVisibility(frame)
-end
-
-function PF:UpdateRaidHealPrediction(frame)
-    local options = self.db and self.db.raidLayout
-    self:UpdateGroupHealPrediction(frame, options)
-end
-
-function PF:UpdateGroupHealPrediction(frame, options)
-    local prediction = frame and frame.groupPrediction
-    HideGroupHealPrediction(frame)
-    local showHealAbsorbs = options and options.showHealAbsorbs
-    if showHealAbsorbs == nil and options then
-        showHealAbsorbs = options.showPredictions
-    end
-    if not prediction or not predictionCalculator or not options
-        or (options.showPredictions == false and showHealAbsorbs == false)
-        or self.testMode or not UnitExists(frame.unit) then
-        return
-    end
-
-    UnitGetDetailedHealPrediction(frame.unit, "player", predictionCalculator)
-    local healthMax = predictionCalculator:GetMaximumHealth()
-    local _, mine, others = predictionCalculator:GetIncomingHeals()
-    local absorbs = predictionCalculator:GetDamageAbsorbs()
-    local healAbsorbs = predictionCalculator:GetHealAbsorbs()
-
-    if options.showPredictions ~= false then
-        prediction.myHeals:SetMinMaxValues(0, healthMax)
-        prediction.myHeals:SetValue(mine)
-        prediction.myHeals:Show()
-        prediction.otherHeals:SetMinMaxValues(0, healthMax)
-        prediction.otherHeals:SetValue(others)
-        prediction.otherHeals:Show()
-        prediction.absorbs:SetMinMaxValues(0, healthMax)
-        prediction.absorbs:SetValue(absorbs)
-        prediction.absorbs:Show()
-    end
-
-    if showHealAbsorbs ~= false then
-        prediction.healAbsorbs:SetMinMaxValues(0, healthMax)
-        prediction.healAbsorbs:SetValue(healAbsorbs)
-        prediction.healAbsorbs:Show()
-    end
-end
-
 local function SetRaidStatusIcon(frame, texturePath)
     if texturePath then
         frame.raidStatusIcon:SetTexture(texturePath)
@@ -319,12 +66,6 @@ local function SetRaidStatusIcon(frame, texturePath)
         frame.raidStatusIcon:Hide()
     end
     UpdateRaidTextVisibility(frame)
-end
-
-local function SetRaidTargetHighlight(frame, shown)
-    if frame.raidTargetHighlight then
-        frame.raidTargetHighlight:SetShown(shown == true)
-    end
 end
 
 local function LayoutRaidName(frame)
@@ -405,7 +146,6 @@ function PF:CreateRaidFrames()
     self.frames.raid = anchor
     self:PlaceFrame(anchor, "raid")
     self:MakeMovable(anchor, "raid")
-    RegisterStateDriver(anchor, "visibility", "[group:raid] show; hide")
 
     anchor.raidGroups = {}
     for groupIndex = 1, 5 do
@@ -423,33 +163,6 @@ function PF:CreateRaidFrames()
         anchor.raidGroups[groupIndex] = group
     end
 
-    anchor.rangeUpdateElapsed = 0
-    anchor:SetScript("OnUpdate", function(widget, elapsed)
-        if not PF.db or not PF.db.locked or PF.testMode or not UnitInRange then return end
-        widget.rangeUpdateElapsed = widget.rangeUpdateElapsed + elapsed
-        if widget.rangeUpdateElapsed < 0.5 then return end
-        widget.rangeUpdateElapsed = 0
-
-        for _, raidFrame in ipairs(widget.raidFrames or {}) do
-            if raidFrame:IsShown() then
-                local exists = UnitExists(raidFrame.unit)
-                local connected = exists and UnitIsConnected(raidFrame.unit)
-                local dead = exists and UnitIsDeadOrGhost(raidFrame.unit)
-                local inPhase = exists and UnitInPhase and UnitInPhase(raidFrame.unit)
-                local unavailable = (PF:IsDisplaySafe(connected) and connected == false)
-                    or (PF:IsDisplaySafe(inPhase) and inPhase == false)
-                if PF:IsDisplaySafe(exists) and exists == true and unavailable then
-                    SetRaidAvailabilityAlpha(raidFrame, RAID_ALPHA_UNAVAILABLE)
-                elseif PF:IsDisplaySafe(exists) and exists == true
-                    and PF:IsDisplaySafe(dead) and dead ~= true then
-                    SetRaidRangeAlpha(raidFrame, UnitInRange(raidFrame.unit))
-                else
-                    SetRaidAvailabilityAlpha(raidFrame, 1)
-                end
-            end
-        end
-    end)
-
     anchor.raidFrames = {}
     for index = 1, 40 do
         local column = math.floor((index - 1) / 8)
@@ -461,7 +174,6 @@ function PF:CreateRaidFrames()
         local row = (index - 1) % 8
         frame:SetPoint("TOPLEFT", group, "TOPLEFT", 0, -row * rowSpacing)
         SetSecureUnit(frame, "raid" .. index)
-        self:RegisterActionFrame(frame, "raid")
         frame.isRaidFrame = true
         table.insert(self.configurableFrames, frame)
 
@@ -616,7 +328,12 @@ function PF:CreateRaidFrames()
         frame.raidTargetOrnamentRight:SetBlendMode("BLEND")
         frame.raidTargetOrnamentRight:SetAlpha(1)
 
-        CreateGroupHealPrediction(frame)
+        frame.unitRoleIndicator = frame.raidRole
+        frame.unitLeadershipIndicator = frame.groupBadge
+        frame.unitTargetHighlight = frame.raidTargetHighlight
+        frame.unitRaidMarker = frame.raidMarker
+
+        self.HealPredictionBehavior:CreateFrame(frame)
 
         frame.nativeDebuffs = CreateRaidDebuffContainer(frame, 20)
         if frame.nativeDebuffs then
@@ -707,6 +424,235 @@ function PF:CreateRaidFrames()
         anchor.raidFrames[index] = frame
     end
 
+    self.FrameBehaviors:AttachGroup(anchor, {
+        kind = "raid",
+        getFrames = function() return anchor.raidFrames end,
+        getOptions = function() return PF.db and PF.db.raidLayout end,
+        behaviors = {
+            outOfRange = {
+                fadeLabel = "Fade Out-of-Range Members",
+                setAvailabilityAlpha = SetRaidAvailabilityAlpha,
+                setRangeAlpha = SetRaidRangeAlpha,
+            },
+            actions = {
+                category = "raid",
+            },
+            healthText = {
+                getMode = function() return PF.db.raidLayout.healthTextMode end,
+                setMode = function(value) PF.db.raidLayout.healthTextMode = value end,
+                getColorMode = function() return PF.db.raidLayout.healthColorMode end,
+                setColorMode = function(value) PF.db.raidLayout.healthColorMode = value end,
+                getBackgroundAlpha = function()
+                    return PF.db.raidLayout.healthBackgroundAlpha
+                end,
+                setBackgroundAlpha = function(value)
+                    PF.db.raidLayout.healthBackgroundAlpha = value
+                end,
+                getIncomingHeals = function()
+                    return PF.db.raidLayout.accountForIncomingHeals == true
+                end,
+                setIncomingHeals = function(value)
+                    PF.db.raidLayout.accountForIncomingHeals = value == true
+                end,
+                getIncomingHealAmount = function(frame, healthMax, testMode)
+                    return PF:GetGroupIncomingHeals(frame, healthMax, testMode)
+                end,
+                afterTextUpdated = function(frame, hasValue)
+                    frame.raidHealthTextHasValue = hasValue == true
+                    UpdateRaidTextVisibility(frame)
+                end,
+                markChanged = function()
+                    PF.DisplayProfileBehavior:MarkCustom(anchor)
+                end,
+                refresh = function() return PF:RefreshRaidFrames() end,
+            },
+            healPrediction = true,
+            scale = {
+                getScale = function() return PF.db.raidLayout.scale or 1 end,
+                setScale = function(value) PF.db.raidLayout.scale = value end,
+                apply = function() PF:RefreshScale() end,
+            },
+            visibility = {
+                getVisibility = function()
+                    return PF.db.raidLayout.visibility or "auto"
+                end,
+                setVisibility = function(value) PF.db.raidLayout.visibility = value end,
+                apply = function() PF:ApplyRaidGroupVisibility() end,
+                isEnabled = function()
+                    return PF.db.replaceRaidFrames ~= false
+                end,
+                getStateVisibility = function()
+                    local options = PF.db.raidLayout
+                    if options.visibility == "show" then return "show" end
+                    if options.visibility == "hide" then return "hide" end
+
+                    local inGroup = IsInGroup and IsInGroup()
+                    local inRaid = IsInRaid and IsInRaid()
+                    local useSmallRaidParty = PF:ShouldUsePartyFramesForSmallRaid()
+                    local showRaid = (inRaid and not useSmallRaidParty)
+                        or (not inRaid and options.useInParty and inGroup)
+                    return showRaid and "show" or "hide"
+                end,
+                getStateDriver = function()
+                    local options = PF.db.raidLayout
+                    if options.visibility == "hide" then return "hide" end
+
+                    if options.visibility == "show" then
+                        return anchor.prettyFramesBindingMode == "party"
+                            and "[group:raid] hide; show"
+                            or "[group:raid] show; hide"
+                    end
+
+                    local raidState = "show"
+                    if PF.db.partyLayout.useInSmallRaid == true
+                        and PF:ShouldUsePartyFramesForSmallRaid() then
+                        -- Raid-size thresholds are not expressible in secure
+                        -- macro conditions; retain the current threshold result.
+                        raidState = "hide"
+                    end
+                    local partyState = options.useInParty and "show" or "hide"
+                    if anchor.prettyFramesBindingMode == "party" then
+                        -- The first rows currently target player/partyN and
+                        -- cannot safely become raid rows until combat ends.
+                        return ("[group:raid] hide; [group] %s; hide"):format(
+                            partyState
+                        )
+                    end
+                    return ("[group:raid] %s; hide"):format(raidState)
+                end,
+            },
+            auraIndicators = true,
+            threat = true,
+            unitIndicators = {
+                showDamageRole = false,
+                setStatusText = function(frame, text)
+                    PF:SetRaidStatusText(frame, text)
+                end,
+                afterApply = function(frame, state)
+                    frame.raidHasRole = state.roleShown == true
+                    LayoutRaidName(frame)
+                end,
+            },
+            displayProfile = {
+                profileSet = "raid",
+                refresh = function()
+                    PF.AuraIndicatorBehavior:RefreshSubject(anchor)
+                end,
+            },
+            groupUsage = {
+                apply = function()
+                    PF:ApplyRaidUnitBindings()
+                    return PF:ApplyGroupStateDrivers()
+                end,
+            },
+            groupUnitBinding = {
+                getUnits = function()
+                    local options = PF.db.raidLayout
+                    local inGroup = IsInGroup and IsInGroup()
+                    local inRaid = IsInRaid and IsInRaid()
+                    local usePartyUnits = options.useInParty and inGroup and not inRaid
+                    anchor.prettyFramesBindingMode = usePartyUnits and "party" or "raid"
+                    return BuildRaidUnitOrder(usePartyUnits, options.sort)
+                end,
+                afterApply = function()
+                    local result = PF.GroupConnectorBehavior:SyncUnits(anchor)
+                    PF:ApplyGroupStateDrivers()
+                    return result
+                end,
+            },
+            groupLayout = {
+                beforeOptionChanged = function(key, previous)
+                    if key == "independentPositioning" and previous == true then
+                        PF:SaveRaidGroupOffsets()
+                    end
+                end,
+                applyOption = function(key)
+                    if key == "showHeaders" then
+                        return PF:ApplyRaidHeaderDisplay()
+                    elseif key == "sort" then
+                        return PF:ApplyRaidUnitBindings()
+                    end
+                    return PF:ApplyRaidGroupLayout()
+                end,
+                refresh = function() return PF:PerformRaidGroupLayout() end,
+                afterEditModeChanged = function()
+                    return PF:ApplyRaidUnitBindings()
+                end,
+            },
+            groupConnectors = {
+                namePrefix = "PrettyFramesRaidConnector",
+                storageKey = "raidConnectors",
+                previewHiddenWhileEditing = false,
+                getVisibility = function()
+                    return PF.db.raidLayout.visibility or "auto"
+                end,
+                isEnabled = function()
+                    return PF.db.replaceRaidFrames ~= false
+                end,
+                getPairs = function()
+                    local pairs = {}
+                    for column = 0, 4 do
+                        for row = 1, 7 do
+                            local upperIndex = column * 8 + row
+                            table.insert(pairs, {
+                                upper = anchor.raidFrames[upperIndex],
+                                lower = anchor.raidFrames[upperIndex + 1],
+                                row = row,
+                            })
+                        end
+                    end
+                    return pairs
+                end,
+                initializeConnector = function(connector, pair)
+                    local upper = pair.upper
+                    connector:SetSize(unpack(themeLayout.connectorSize))
+                    connector:SetPoint(
+                        "CENTER", upper, "TOPLEFT", frameWidth / 2,
+                        themeLayout.connectorYOffset
+                    )
+                    connector:SetFrameLevel(upper:GetFrameLevel())
+                    if connector.SetClipsChildren then
+                        connector:SetClipsChildren(true)
+                    end
+
+                    local offset = (pair.row - 1) * themeLayout.connectorSampleStep
+                    connector.leftTexture = connector:CreateTexture(nil, "BACKGROUND")
+                    connector.leftTexture:SetSize(unpack(themeLayout.connectorStrandSize))
+                    connector.leftTexture:SetPoint(
+                        "CENTER", connector, "LEFT", themeLayout.connectorLeftX, 0
+                    )
+                    connector.leftTexture:SetTexture(
+                        PF:ThemeFrameAsset("raid", "partyConnector", "partyConnector"),
+                        "CLAMP", "REPEAT"
+                    )
+                    connector.leftTexture:SetTexCoord(
+                        themeLayout.connectorSourceLeft,
+                        themeLayout.connectorSourceRight,
+                        offset,
+                        offset + themeLayout.connectorSampleHeight
+                    )
+
+                    local rightOffset = offset + themeLayout.connectorRightSampleOffset
+                    connector.rightTexture = connector:CreateTexture(nil, "BACKGROUND")
+                    connector.rightTexture:SetSize(unpack(themeLayout.connectorStrandSize))
+                    connector.rightTexture:SetPoint(
+                        "CENTER", connector, "LEFT", themeLayout.connectorRightX, 0
+                    )
+                    connector.rightTexture:SetTexture(
+                        PF:ThemeFrameAsset("raid", "partyConnector", "partyConnector"),
+                        "CLAMP", "REPEAT"
+                    )
+                    connector.rightTexture:SetTexCoord(
+                        themeLayout.connectorSourceRight,
+                        themeLayout.connectorSourceLeft,
+                        rightOffset,
+                        rightOffset + themeLayout.connectorSampleHeight
+                    )
+                end,
+            },
+        },
+    })
+
     anchor.raidHeaders = {}
     for column = 0, 4 do
         local firstFrame = anchor.raidFrames[column * 8 + 1]
@@ -780,76 +726,6 @@ function PF:CreateRaidFrames()
         )
     end
 
-    -- Reuse the Party-frame vine as a vertical link between neighboring raid
-    -- members. Each secure connector watches the lower unit and is parented to
-    -- the upper frame, so it naturally disappears unless both frames exist.
-    anchor.raidConnectors = {}
-    for column = 0, 4 do
-        for row = 1, 7 do
-            local upperIndex = column * 8 + row
-            local upper = anchor.raidFrames[upperIndex]
-            local lower = anchor.raidFrames[upperIndex + 1]
-            local connectorIndex = column * 7 + row
-            local connector = CreateFrame(
-                "Button",
-                "PrettyFramesRaidConnector" .. connectorIndex,
-                upper,
-                "SecureUnitButtonTemplate"
-            )
-            connector:SetSize(unpack(themeLayout.connectorSize))
-            connector:SetPoint("CENTER", upper, "TOPLEFT", frameWidth / 2, themeLayout.connectorYOffset)
-            connector:SetFrameLevel(upper:GetFrameLevel())
-            connector:EnableMouse(false)
-            if connector.SetClipsChildren then
-                connector:SetClipsChildren(true)
-            end
-            connector:SetAttribute("unit", lower.unit)
-
-            -- Display a 28x36 window while sampling a smaller 22x29 region of
-            -- the Party connector. This enlarges the vine by roughly 25%
-            -- without letting either strand occupy more of the health bar.
-            local verticalOffset = (row - 1) * themeLayout.connectorSampleStep
-            connector.leftTexture = connector:CreateTexture(nil, "BACKGROUND")
-            connector.leftTexture:SetSize(unpack(themeLayout.connectorStrandSize))
-            connector.leftTexture:SetPoint("CENTER", connector, "LEFT", themeLayout.connectorLeftX, 0)
-            connector.leftTexture:SetTexture(
-                self:ThemeFrameAsset("raid", "partyConnector", "partyConnector"),
-                "CLAMP", "REPEAT"
-            )
-            connector.leftTexture:SetTexCoord(
-                themeLayout.connectorSourceLeft, themeLayout.connectorSourceRight,
-                verticalOffset, verticalOffset + themeLayout.connectorSampleHeight
-            )
-
-            -- A second, mirrored strand sits toward the right side. Offset its
-            -- vertical sample so adjacent leaves and curls do not line up with
-            -- the left strand even though both reuse the same source texture.
-            local rightVerticalOffset = verticalOffset + themeLayout.connectorRightSampleOffset
-            connector.rightTexture = connector:CreateTexture(nil, "BACKGROUND")
-            connector.rightTexture:SetSize(unpack(themeLayout.connectorStrandSize))
-            connector.rightTexture:SetPoint("CENTER", connector, "LEFT", themeLayout.connectorRightX, 0)
-            connector.rightTexture:SetTexture(
-                self:ThemeFrameAsset("raid", "partyConnector", "partyConnector"),
-                "CLAMP", "REPEAT"
-            )
-            connector.rightTexture:SetTexCoord(
-                themeLayout.connectorSourceRight, themeLayout.connectorSourceLeft,
-                rightVerticalOffset, rightVerticalOffset + themeLayout.connectorSampleHeight
-            )
-
-            connector.upperFrame = upper
-            connector.lowerFrame = lower
-            RegisterUnitWatch(connector)
-            anchor.raidConnectors[connectorIndex] = connector
-        end
-    end
-
-    for _, frame in ipairs(anchor.raidFrames) do
-        frame.OnVisibilityApplied = function()
-            PF:UpdateRaidConnectors()
-        end
-    end
-
     anchor.moveHandle:SetScript("OnMouseUp", function(handle, mouseButton)
         if mouseButton == "RightButton" then
             PF:OpenRaidContextMenu(handle)
@@ -857,6 +733,7 @@ function PF:CreateRaidFrames()
     end)
 
     self:ApplyRaidUnitBindings()
+    self.AuraIndicatorBehavior:RefreshSubject(anchor)
     self:ApplyRaidGroupLayout()
     self:ApplyRaidGroupVisibility()
 end
@@ -888,14 +765,9 @@ function PF:ApplyRaidHeaderDisplay()
     end
 end
 
-function PF:ApplyRaidGroupLayout()
+function PF:PerformRaidGroupLayout()
     local anchor = self.frames.raid
     if not anchor or not anchor.raidGroups then return end
-    if InCombatLockdown() then
-        self.pendingRaidLayout = true
-        return false
-    end
-
     local options = self.db.raidLayout
     for groupIndex, group in ipairs(anchor.raidGroups) do
         local offset = options.groupOffsets and options.groupOffsets[groupIndex] or { 0, 0 }
@@ -905,7 +777,6 @@ function PF:ApplyRaidGroupLayout()
         group:SetPoint("TOPLEFT", anchor, "TOPLEFT", group.defaultX + offsetX, offsetY)
     end
 
-    self.pendingRaidLayout = nil
     self:ApplyRaidHeaderDisplay()
     return true
 end
@@ -960,66 +831,6 @@ function PF:ApplyRaidGroupVisibility()
     end
     self:UpdateRaidConnectors()
     self:ApplyRaidHeaderDisplay()
-    self:ApplyGroupStateDrivers()
-end
-
-function PF:ApplyRaidUnitBindings()
-    local anchor = self.frames.raid
-    if not anchor or not anchor.raidFrames then return end
-    if InCombatLockdown() then
-        self.pendingRaidUnitBindings = true
-        return false
-    end
-
-    local options = self.db.raidLayout
-    local inGroup = IsInGroup and IsInGroup()
-    local inRaid = IsInRaid and IsInRaid()
-    local usePartyUnits = options.useInParty and inGroup and not inRaid
-    local orderedUnits = BuildRaidUnitOrder(usePartyUnits, options.sort)
-    for index, frame in ipairs(anchor.raidFrames) do
-        local unit = orderedUnits[index]
-
-        if frame.unit ~= unit then
-            UnregisterUnitWatch(frame)
-            frame.unit = unit
-            frame:SetAttribute("unit", unit)
-            for _, holder in ipairs({ frame.nativeBuffs, frame.nativeDebuffs, frame.nativeMaintenance }) do
-                if holder and holder.container then
-                    holder.container:SetUnit(unit)
-                end
-            end
-        end
-        self:ApplyFrameVisibility(frame)
-        self:UpdateUnitFrame(frame, true)
-    end
-
-    for _, connector in ipairs(anchor.raidConnectors or {}) do
-        UnregisterUnitWatch(connector)
-        connector:SetAttribute("unit", connector.lowerFrame.unit)
-    end
-
-    self.pendingRaidUnitBindings = nil
-    self:UpdateRaidConnectors()
-    return true
-end
-
-function PF:UpdateRaidConnectors()
-    local anchor = self.frames.raid
-    if not anchor or not anchor.raidConnectors or InCombatLockdown() then return end
-
-    local visibility = self.db.raidLayout and self.db.raidLayout.visibility or "auto"
-    local editing = self.db and not self.db.locked
-    for _, connector in ipairs(anchor.raidConnectors) do
-        if visibility == "hide" then
-            UnregisterUnitWatch(connector)
-            connector:Hide()
-        elseif editing or self.testMode or visibility == "show" then
-            UnregisterUnitWatch(connector)
-            connector:Show()
-        else
-            RegisterUnitWatch(connector)
-        end
-    end
 end
 
 function PF:UpdateRaidPresentation(frame, exists, previewIndex, disconnected, dead)
@@ -1033,13 +844,8 @@ function PF:UpdateRaidPresentation(frame, exists, previewIndex, disconnected, de
     frame:SetAlpha(hiddenPreview and 0.5 or 1)
     SetRaidAvailabilityAlpha(frame, 1)
 
-    frame.raidRole:Hide()
-    SetRaidMarkerTexture(frame.raidMarker)
-    SetRaidTargetHighlight(frame, false)
-    frame.groupBadge:Hide()
     SetRaidStatusIcon(frame)
     SetRaidAccent(frame)
-    HideGroupHealPrediction(frame)
     for _, debuff in ipairs(frame.raidDebuffs or {}) do
         debuff:Hide()
     end
@@ -1051,39 +857,7 @@ function PF:UpdateRaidPresentation(frame, exists, previewIndex, disconnected, de
     LayoutRaidName(frame)
 
     if self.testMode then
-        if previewIndex == 17 then
-            self:SetRaidStatusText(frame, "AFK")
-        elseif previewIndex == 18 then
-            self:SetRaidStatusText(frame, "OFFLINE")
-        elseif previewIndex == 20 then
-            self:SetRaidStatusText(frame, "DEAD")
-            frame.health:SetStatusBarColor(unpack(self.colors.dead))
-        else
-            self:SetRaidStatusText(frame, "")
-        end
-
-        local previewRoles = { [1] = "TANK", [2] = "HEALER" }
-        local role = previewRoles[previewIndex]
-        if self.db.raidLayout.showRoleIcons ~= false and role then
-            SetPartyRole(frame.raidRole, role)
-            frame.raidRole:Show()
-            frame.raidHasRole = true
-            LayoutRaidName(frame)
-        end
-
-        if self.db.raidLayout.showLeadership ~= false and previewIndex == 3 then
-            frame.groupBadge:SetTexture("Interface\\GroupFrame\\UI-Group-LeaderIcon")
-            frame.groupBadge:Show()
-        elseif self.db.raidLayout.showLeadership ~= false and previewIndex == 4 then
-            frame.groupBadge:SetTexture("Interface\\GroupFrame\\UI-Group-AssistantIcon")
-            frame.groupBadge:Show()
-        elseif previewIndex == 5 then
-            SetRaidMarkerTexture(frame.raidMarker, 8)
-        elseif previewIndex == 6 then
-            SetRaidMarkerTexture(frame.raidMarker, 1)
-        elseif self.db.raidLayout.showTargetHighlight ~= false and previewIndex == 7 then
-            SetRaidTargetHighlight(frame, true)
-        elseif self.db.raidLayout.showThreat ~= false and previewIndex == 8 then
+        if self.db.raidLayout.showThreat ~= false and previewIndex == 8 then
             SetRaidAccent(frame, 1.00, 0.18, 0.10, 1)
         end
 
@@ -1120,33 +894,10 @@ function PF:UpdateRaidPresentation(frame, exists, previewIndex, disconnected, de
             end
         end
 
-        local prediction = frame.groupPrediction
-        if prediction and self.db.raidLayout.showPredictions ~= false and previewIndex == 15 then
-            prediction.myHeals:SetMinMaxValues(0, 100)
-            prediction.myHeals:SetValue(22)
-            prediction.myHeals:Show()
-        end
-        if prediction and self.db.raidLayout.showPredictions ~= false and previewIndex == 16 then
-            prediction.myHeals:SetMinMaxValues(0, 100)
-            prediction.myHeals:SetValue(0)
-            prediction.myHeals:Show()
-            prediction.otherHeals:SetMinMaxValues(0, 100)
-            prediction.otherHeals:SetValue(0)
-            prediction.otherHeals:Show()
-            prediction.absorbs:SetMinMaxValues(0, 100)
-            prediction.absorbs:SetValue(20)
-            prediction.absorbs:Show()
-        end
-        if prediction and self.db.raidLayout.showHealAbsorbs ~= false and previewIndex == 22 then
-            prediction.healAbsorbs:SetMinMaxValues(0, 100)
-            prediction.healAbsorbs:SetValue(24)
-            prediction.healAbsorbs:Show()
-        end
-
         if previewIndex == 14 or previewIndex == 18 then
             SetRaidAvailabilityAlpha(frame, RAID_ALPHA_UNAVAILABLE)
         elseif previewIndex == 19 then
-            SetRaidAvailabilityAlpha(frame, RAID_ALPHA_OUT_OF_RANGE)
+            SetRaidAvailabilityAlpha(frame, self.db.raidLayout.outOfRangeAlpha or 0.55)
         else
             SetRaidAvailabilityAlpha(frame, 1)
         end
@@ -1155,32 +906,6 @@ function PF:UpdateRaidPresentation(frame, exists, previewIndex, disconnected, de
 
     if not exists then return end
     local unit = frame.unit
-    if self.db.raidLayout.showRoleIcons ~= false and UnitGroupRolesAssigned then
-        local role = UnitGroupRolesAssigned(unit)
-        if self:IsDisplaySafe(role) and (role == "TANK" or role == "HEALER") then
-            SetPartyRole(frame.raidRole, role)
-            frame.raidRole:Show()
-            frame.raidHasRole = true
-            LayoutRaidName(frame)
-        end
-    end
-
-    if GetRaidTargetIndex then
-        local markerIndex = GetRaidTargetIndex(unit)
-        SetRaidMarkerTexture(frame.raidMarker, markerIndex)
-    end
-
-    local isLeader = UnitIsGroupLeader and UnitIsGroupLeader(unit)
-    local isAssistant = UnitIsGroupAssistant and UnitIsGroupAssistant(unit)
-    if self.db.raidLayout.showLeadership ~= false
-        and self:IsDisplaySafe(isLeader) and isLeader == true then
-        frame.groupBadge:SetTexture("Interface\\GroupFrame\\UI-Group-LeaderIcon")
-        frame.groupBadge:Show()
-    elseif self.db.raidLayout.showLeadership ~= false
-        and self:IsDisplaySafe(isAssistant) and isAssistant == true then
-        frame.groupBadge:SetTexture("Interface\\GroupFrame\\UI-Group-AssistantIcon")
-        frame.groupBadge:Show()
-    end
 
     local statusTexture
     local hasResurrection = UnitHasIncomingResurrection and UnitHasIncomingResurrection(unit)
@@ -1216,12 +941,7 @@ function PF:UpdateRaidPresentation(frame, exists, previewIndex, disconnected, de
     end
     SetRaidStatusIcon(frame, statusTexture)
 
-    local isTarget = UnitIsUnit and UnitIsUnit(unit, "target")
     local threat = UnitThreatSituation and UnitThreatSituation(unit)
-    if self.db.raidLayout.showTargetHighlight ~= false
-        and self:IsDisplaySafe(isTarget) and isTarget == true then
-        SetRaidTargetHighlight(frame, true)
-    end
     if self.db.raidLayout.showThreat ~= false
         and self:IsDisplaySafe(threat) and threat and threat >= 2 then
         local role = UnitGroupRolesAssigned and UnitGroupRolesAssigned(unit)
@@ -1233,13 +953,5 @@ function PF:UpdateRaidPresentation(frame, exists, previewIndex, disconnected, de
         end
     end
 
-    if self.db.locked then
-        if disconnected or outOfPhase then
-            SetRaidAvailabilityAlpha(frame, RAID_ALPHA_UNAVAILABLE)
-        elseif not dead and UnitInRange then
-            SetRaidRangeAlpha(frame, UnitInRange(unit))
-        end
-    end
-    self:UpdateRaidHealPrediction(frame)
 end
 

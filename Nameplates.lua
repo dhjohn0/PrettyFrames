@@ -40,6 +40,45 @@ local function IsAccessible(frame)
     return true
 end
 
+local function GetHealthComponents(unitFrame)
+    if not unitFrame then return end
+    local container = unitFrame.HealthBarsContainer
+        or unitFrame.healthBarsContainer
+    local healthBar = container and (container.healthBar or container.HealthBar)
+        or unitFrame.healthBar or unitFrame.healthbar or unitFrame.HealthBar
+    if not container and healthBar and healthBar.GetParent then
+        container = healthBar:GetParent()
+    end
+    if not IsAccessible(container) or not IsAccessible(healthBar) then return end
+    return container, healthBar
+end
+
+local function GetCastComponents(unitFrame)
+    if not unitFrame then return end
+    local container = unitFrame.CastBarsContainer
+        or unitFrame.castBarsContainer
+    local castBar = container and (container.castBar or container.CastBar)
+        or unitFrame.castBar or unitFrame.CastBar
+    if not container and castBar and castBar.GetParent then
+        container = castBar:GetParent()
+    end
+    if not IsAccessible(container) or not IsAccessible(castBar) then return end
+    return container, castBar
+end
+
+local function GetNameplateUnitColor(unit, healthBar)
+    local isPlayer = UnitIsPlayer(unit)
+    if PF:IsDisplaySafe(isPlayer) and isPlayer == true then
+        local _, classFile = UnitClass(unit)
+        local color = PF:IsDisplaySafe(classFile) and RAID_CLASS_COLORS
+            and RAID_CLASS_COLORS[classFile]
+        if color then return color.r, color.g, color.b end
+    end
+    local r, g, b = PF.HealthTextBehavior:ResolveReactionColor(unit)
+    if r then return r, g, b end
+    return healthBar:GetStatusBarColor()
+end
+
 local function UpdateHealthText(unitFrame)
     local unit = unitFrame.prettyFramesUnit
     if not unit or not unitFrame.prettyFramesHealthText then return end
@@ -49,7 +88,39 @@ local function UpdateHealthText(unitFrame)
     -- to addon Lua.
     local current = UnitHealth(unit)
     local maximum = UnitHealthMax(unit)
-    unitFrame.prettyFramesHealthText:SetFormattedText("%s / %s", current, maximum)
+    if PF.HealthTextBehavior then
+        local _, healthBar = GetHealthComponents(unitFrame)
+        if not healthBar then return end
+        local r, g, b = GetNameplateUnitColor(unit, healthBar)
+        local dead = UnitIsDeadOrGhost(unit)
+        dead = PF:IsDisplaySafe(dead) and dead == true
+        local options = unitFrame.prettyFramesHealthOptions
+        if not options then
+            options = {
+                getMode = function()
+                    return PF:GetFrameSetting("nameplate").healthTextMode
+                end,
+                getColorMode = function()
+                    return PF:GetFrameSetting("nameplate").healthColorMode
+                end,
+                getBackgroundAlpha = function()
+                    return PF:GetFrameSetting("nameplate").healthBackgroundAlpha
+                end,
+                getBar = function() return select(2, GetHealthComponents(unitFrame)) end,
+                getText = function() return unitFrame.prettyFramesHealthText end,
+                getBackground = function()
+                    return unitFrame.prettyFramesHealthBackground
+                end,
+                getUnit = function() return unitFrame.prettyFramesUnit end,
+            }
+            unitFrame.prettyFramesHealthOptions = options
+        end
+        PF.HealthTextBehavior:UpdateFrame(
+            unitFrame, current, maximum, { r, g, b }, dead, options
+        )
+    else
+        unitFrame.prettyFramesHealthText:SetFormattedText("%s / %s", current, maximum)
+    end
 end
 
 local function UpdateLevelText(unitFrame)
@@ -168,7 +239,7 @@ local function ApplyCastVisuals(castBar)
 end
 
 local function UpdateCastInterruptGlow(unitFrame, event)
-    local castBar = unitFrame.CastBarsContainer and unitFrame.CastBarsContainer.castBar
+    local _, castBar = GetCastComponents(unitFrame)
     local unit = unitFrame.prettyFramesUnit
     if not castBar or not castBar.prettyFramesInterruptibleGlow or not unit
         or not PF.CastBars or not PF.CastBars.SetInterruptible then
@@ -270,6 +341,11 @@ local function CreateNameplateArtwork(unitFrame, healthContainer, healthBar)
     PF:ApplyBoldNumberFont(healthText, 9)
     unitFrame.prettyFramesHealthText = healthText
 
+    local healthBackground = healthBar:CreateTexture(nil, "BACKGROUND", nil, -1)
+    healthBackground:SetAllPoints(healthBar)
+    healthBackground:SetColorTexture(0.025, 0.018, 0.012, 1)
+    unitFrame.prettyFramesHealthBackground = healthBackground
+
     local levelText = healthContainer:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     PF:SetThemePoint(levelText, healthContainer, themeLayout.levelPoint)
     levelText:SetTextColor(1, 0.83, 0.35)
@@ -282,14 +358,13 @@ local function CreateNameplateArtwork(unitFrame, healthContainer, healthBar)
 end
 
 local function StyleCastBar(unitFrame, healthBar)
-    local castBar = unitFrame.CastBarsContainer and unitFrame.CastBarsContainer.castBar
+    local castContainer, castBar = GetCastComponents(unitFrame)
     if not castBar then return end
 
     -- Blizzard anchors the native cast bar directly beneath its much smaller
     -- stock health bar. Our artwork extends farther below that anchor, so move
     -- only the cast StatusBar down while leaving the health container and all
     -- protected cast timing/state bindings untouched.
-    local castContainer = unitFrame.CastBarsContainer
     castBar:ClearAllPoints()
     castBar:SetPoint("TOPLEFT", castContainer, "TOPLEFT", 0, themeLayout.castYOffset)
     castBar:SetPoint("TOPRIGHT", castContainer, "TOPRIGHT", 0, themeLayout.castYOffset)
@@ -350,8 +425,7 @@ end
 
 local function ApplyNameplateStructure(unitFrame)
     if not IsAccessible(unitFrame) then return end
-    local healthContainer = unitFrame.HealthBarsContainer
-    local healthBar = healthContainer and healthContainer.healthBar
+    local healthContainer, healthBar = GetHealthComponents(unitFrame)
     if not healthBar then return end
 
     if not unitFrame.prettyFramesArtwork then
@@ -373,9 +447,10 @@ local function ApplyNameplateStructure(unitFrame)
     SetNativeRaidMarkerAlpha(unitFrame, 1)
 
     -- Preserve the native StatusBar object and its protected update bindings.
-    if healthBar.barTexture then
-        healthBar.barTexture:SetTexture(PF:ThemeFrameAsset("nameplate", "statusBar", "statusBar"))
-    end
+    local statusBarTexture = PF:ThemeFrameAsset("nameplate", "statusBar", "statusBar")
+    if healthBar.SetStatusBarTexture then healthBar:SetStatusBarTexture(statusBarTexture) end
+    if healthBar.barTexture then healthBar.barTexture:SetTexture(statusBarTexture) end
+    if healthBar.BarTexture then healthBar.BarTexture:SetTexture(statusBarTexture) end
     if healthBar.bgTexture then healthBar.bgTexture:SetAlpha(0) end
     if healthBar.selectedBorder then healthBar.selectedBorder:SetAlpha(0) end
     if healthBar.deselectedOverlay then healthBar.deselectedOverlay:SetAlpha(0) end
@@ -473,12 +548,18 @@ function PF:ClearNameplate(unit)
         unitFrame.prettyFramesUnit = nil
         if unitFrame.prettyFramesTargetGlow then unitFrame.prettyFramesTargetGlow:SetAlpha(0) end
         if unitFrame.prettyFramesRaidMarker then SetRaidMarkerTexture(unitFrame.prettyFramesRaidMarker) end
-        local castBar = unitFrame.CastBarsContainer and unitFrame.CastBarsContainer.castBar
+        local _, castBar = GetCastComponents(unitFrame)
         if castBar and castBar.prettyFramesInterruptibleGlow then
             castBar.prettyFramesInterruptibleGlow:Hide()
         end
     end
     self.activeNameplates[unit] = nil
+end
+
+function PF:RefreshNameplateHealth()
+    for _, unitFrame in pairs(self.activeNameplates) do
+        pcall(UpdateHealthText, unitFrame)
+    end
 end
 
 local driver = CreateFrame("Frame")
@@ -487,6 +568,8 @@ driver:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
 driver:RegisterEvent("UNIT_HEALTH")
 driver:RegisterEvent("UNIT_MAXHEALTH")
 driver:RegisterEvent("UNIT_LEVEL")
+driver:RegisterEvent("UNIT_FACTION")
+driver:RegisterEvent("UNIT_FLAGS")
 driver:RegisterEvent("PLAYER_TARGET_CHANGED")
 driver:RegisterEvent("RAID_TARGET_UPDATE")
 driver:RegisterEvent("PLAYER_ENTERING_WORLD")

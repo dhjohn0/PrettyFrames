@@ -8,6 +8,8 @@
 ## Dependencies: Blizzard_AuraContainer, Blizzard_NamePlates, Blizzard_UnitFrame, Blizzard_UIPanels_Game
 ## OptionalDeps: Masque, Clique
 
+Libs\LibStub\LibStub.lua
+Libs\LibRangeCheck-3.0\LibRangeCheck-3.0.lua
 Core.lua
 Themes.lua
 Themes\Verdant\Data.lua
@@ -20,12 +22,34 @@ Themes\Orgrimmar\Data.lua
 Themes\Orgrimmar\Frames.lua
 Themes\Orgrimmar\Theme.lua
 Database.lua
+FrameBehaviors.lua
+EditModeBehavior.lua
+PortraitBehavior.lua
+HealthTextBehavior.lua
+DisplayProfileBehavior.lua
+ThreatBehavior.lua
+GroupUsageBehavior.lua
+GroupUnitBindingBehavior.lua
+GroupLayoutBehavior.lua
+GroupConnectorBehavior.lua
+AttachedPositionBehavior.lua
+FlipBehavior.lua
+CastBarBehavior.lua
+PowerBarBehavior.lua
+PetDisplayBehavior.lua
+ClassResourceBehavior.lua
 Actions.lua
 FrameSettings.lua
+ScaleBehavior.lua
+VisibilityBehavior.lua
 ActionsUI.lua
 FrameWidgets.lua
+HealPredictionBehavior.lua
+UnitIndicatorBehavior.lua
+OutOfRangeBehavior.lua
 ClassResources.lua
 Auras.lua
+AuraIndicatorBehavior.lua
 CastBars.lua
 UnitFrameData.lua
 OrnateUnitFrames.lua

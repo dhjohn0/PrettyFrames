@@ -134,14 +134,9 @@ local function RegisterBossFramePositioning(frame)
     end)
 end
 
-function PF:ApplyBossFramesVisibility()
+function PF:PerformBossFramesVisibility()
     local anchor = self.frames.boss
     if not anchor then return end
-    if InCombatLockdown() then
-        self.pendingBossVisibility = true
-        return false
-    end
-
     local enabled = self.db.replaceBossFrames == true and anchor.initialized == true
     local setting = self:GetFrameSetting("boss")
     local visibility = setting.visibility or "auto"
@@ -164,18 +159,12 @@ function PF:ApplyBossFramesVisibility()
         SetBossUnitVisibility(frame, showMode, alpha)
     end
     if self.UpdateBossConnectors then self:UpdateBossConnectors() end
-    self.pendingBossVisibility = nil
     return true
 end
 
-function PF:ApplyBossGroupLayout()
+function PF:PerformBossGroupLayout()
     local anchor = self.frames.boss
     if not anchor then return end
-    if InCombatLockdown() then
-        self.pendingBossLayout = true
-        return false
-    end
-
     local layout = self:ThemeLayout("bossFrames")
     local growUpwards = self.db.bossLayout.growUpwards == true
     local height = self:ThemeLayout("unitFrames").targetOfTargetSize[2]
@@ -194,10 +183,17 @@ function PF:ApplyBossGroupLayout()
     end
 
     local partyLayout = self:ThemeLayout("party")
-    for index, connector in ipairs(anchor.bossConnectors or {}) do
-        local upper = growUpwards and anchor.bossFrames[index + 1] or anchor.bossFrames[index]
-        local lower = growUpwards and anchor.bossFrames[index] or anchor.bossFrames[index + 1]
-        connector:SetParent(upper)
+    local pairs = {}
+    for index = 1, BOSS_COUNT - 1 do
+        pairs[index] = {
+            upper = growUpwards and anchor.bossFrames[index + 1]
+                or anchor.bossFrames[index],
+            lower = growUpwards and anchor.bossFrames[index]
+                or anchor.bossFrames[index + 1],
+        }
+    end
+    self.GroupConnectorBehavior:Relink(anchor, pairs, function(connector)
+        local upper = connector.upperFrame
         connector:ClearAllPoints()
         local connectorPoint = upper.isMirrored
             and self:MirrorThemePoint(partyLayout.connectorPoint)
@@ -205,38 +201,8 @@ function PF:ApplyBossGroupLayout()
         self:SetThemePoint(connector, upper, connectorPoint)
         connector:SetFrameLevel(upper:GetFrameLevel() + 1)
         connector.clipper:SetFrameLevel(connector:GetFrameLevel())
-        connector:SetAttribute("unit", lower.unit)
-        connector.upperFrame = upper
-        connector.lowerFrame = lower
-    end
-    if self.UpdateBossConnectors then self:UpdateBossConnectors() end
-    self.pendingBossLayout = nil
+    end)
     return true
-end
-
-function PF:UpdateBossConnectors()
-    local anchor = self.frames.boss
-    if not anchor or not anchor.bossConnectors or InCombatLockdown() then return end
-
-    local setting = self:GetFrameSetting("boss")
-    local enabled = self.db.replaceBossFrames == true and anchor.initialized == true
-    for _, connector in ipairs(anchor.bossConnectors) do
-        UnregisterUnitWatch(connector)
-        connector:SetAlpha(1)
-        local mismatchedSides = connector.upperFrame and connector.lowerFrame
-            and connector.upperFrame.isMirrored ~= connector.lowerFrame.isMirrored
-        if self.db.bossLayout.independentPositioning or mismatchedSides or not enabled
-            or (self.db.locked and setting.visibility == "hide") then
-            connector:Hide()
-        elseif not self.db.locked then
-            connector:SetAlpha(setting.visibility == "hide" and 0.5 or 1)
-            connector:Show()
-        elseif self.testMode or setting.visibility == "show" then
-            connector:Show()
-        else
-            RegisterUnitWatch(connector)
-        end
-    end
 end
 
 function PF:RefreshBossFrames(updateModel)
@@ -259,7 +225,6 @@ function PF:CreateBossFrames()
     anchor.isBossGroup = true
     anchor.bossFrames = {}
     anchor.settingKey = "boss"
-    anchor.actionCategory = "boss"
     self.frames.boss = anchor
     self:PlaceFrame(anchor, "boss")
     self:MakeMovable(anchor, "boss")
@@ -275,7 +240,7 @@ function PF:CreateBossFrames()
         local frame = self:CreateOrnateUnitFrame(
             "PrettyFramesBoss" .. index, unit, width, height, nil, true, true,
             {
-                actionCategory = "boss",
+                skipActionBehavior = true,
                 settingKey = "boss",
                 skipContextMenu = true,
                 isBossFrame = true,
@@ -304,43 +269,179 @@ function PF:CreateBossFrames()
     end
 
     local partyLayout = self:ThemeLayout("party")
-    anchor.bossConnectors = {}
-    for index = 1, BOSS_COUNT - 1 do
-        local connector = CreateFrame(
-            "Button", "PrettyFramesBossConnector" .. index, anchor,
-            "SecureUnitButtonTemplate"
-        )
-        connector:SetSize(unpack(partyLayout.connectorSize))
-        connector:EnableMouse(false)
-
-        connector.clipper = CreateFrame("Frame", nil, connector)
-        connector.clipper:SetFrameLevel(connector:GetFrameLevel())
-        if index == 1 then
-            connector.clipper:SetPoint("TOPLEFT", connector, "TOPLEFT", 0, -partyLayout.connectorEndCrop)
-            connector.clipper:SetPoint("BOTTOMRIGHT", connector, "BOTTOMRIGHT", 0, 0)
-        elseif index == BOSS_COUNT - 1 then
-            connector.clipper:SetPoint("TOPLEFT", connector, "TOPLEFT", 0, 0)
-            connector.clipper:SetPoint("BOTTOMRIGHT", connector, "BOTTOMRIGHT", 0, partyLayout.connectorEndCrop)
-        else
-            connector.clipper:SetAllPoints(connector)
-        end
-        if connector.clipper.SetClipsChildren then
-            connector.clipper:SetClipsChildren(true)
-        end
-
-        connector.texture = connector.clipper:CreateTexture(nil, "BACKGROUND")
-        connector.texture:SetPoint("TOPLEFT", connector, "TOPLEFT", 0, 0)
-        connector.texture:SetPoint("BOTTOMRIGHT", connector, "BOTTOMRIGHT", 0, 0)
-        connector.texture:SetTexture(
-            self:ThemeFrameAsset("boss", "partyConnector", "partyConnector"), "CLAMP", "REPEAT"
-        )
-        local verticalOffset = (index - 1) * partyLayout.connectorSampleStep
-        connector.texture:SetTexCoord(0, 1, verticalOffset, 1 + verticalOffset)
-        anchor.bossConnectors[index] = connector
-    end
-
     anchor.initialized = #anchor.bossFrames == BOSS_COUNT
-    self:ApplyBossAuraOptions()
+    self.FrameBehaviors:AttachGroup(anchor, {
+        kind = "boss",
+        getFrames = function() return anchor.bossFrames end,
+        getOptions = function() return PF.db and PF.db.bossLayout end,
+        behaviors = {
+            actions = {
+                category = "boss",
+            },
+            outOfRange = {
+                isActive = function()
+                    return PF.db and PF.db.replaceBossFrames == true
+                end,
+                fadeLabel = "Fade Out-of-Range Bosses",
+            },
+            scale = {
+                getFrames = function() return { anchor } end,
+                getScale = function()
+                    return PF:GetFrameSetting("boss").scale or 1
+                end,
+                setScale = function(value)
+                    PF:GetFrameSetting("boss").scale = value
+                end,
+                apply = function() return PF:ApplyFrameScale(anchor) end,
+            },
+            visibility = {
+                getFrames = function() return { anchor } end,
+                getVisibility = function()
+                    return PF:GetFrameSetting("boss").visibility or "auto"
+                end,
+                setVisibility = function(value)
+                    PF:GetFrameSetting("boss").visibility = value
+                end,
+                apply = function() return PF:PerformBossFramesVisibility() end,
+            },
+            healthText = {
+                getMode = function() return PF.db.bossLayout.healthTextMode end,
+                setMode = function(value) PF.db.bossLayout.healthTextMode = value end,
+                getColorMode = function() return PF.db.bossLayout.healthColorMode end,
+                setColorMode = function(value) PF.db.bossLayout.healthColorMode = value end,
+                getBackgroundAlpha = function()
+                    return PF.db.bossLayout.healthBackgroundAlpha
+                end,
+                setBackgroundAlpha = function(value)
+                    PF.db.bossLayout.healthBackgroundAlpha = value
+                end,
+                getSparkShown = function() return PF.db.bossLayout.healthSpark ~= false end,
+                setSparkShown = function(value) PF.db.bossLayout.healthSpark = value == true end,
+                refresh = function() return PF:RefreshBossFrames(false) end,
+            },
+            powerBar = {
+                label = "Hide Power Bar",
+                getMode = function() return PF.db.bossLayout.powerTextMode end,
+                setMode = function(value) PF.db.bossLayout.powerTextMode = value end,
+                getColorMode = function() return PF.db.bossLayout.powerColorMode end,
+                setColorMode = function(value) PF.db.bossLayout.powerColorMode = value end,
+                getBackgroundAlpha = function()
+                    return PF.db.bossLayout.powerBackgroundAlpha
+                end,
+                setBackgroundAlpha = function(value)
+                    PF.db.bossLayout.powerBackgroundAlpha = value
+                end,
+                getSparkShown = function() return PF.db.bossLayout.powerSpark ~= false end,
+                setSparkShown = function(value) PF.db.bossLayout.powerSpark = value == true end,
+                getOneBar = function() return PF.db.bossLayout.forceOneBar == true end,
+                setOneBar = function(value) PF.db.bossLayout.forceOneBar = value == true end,
+                apply = function() return PF:RefreshBossFrames(false) end,
+            },
+            auraIndicators = true,
+            groupLayout = {
+                beforeOptionChanged = function(key, previous, value)
+                    if key ~= "independentPositioning" or previous == true
+                        or value ~= true then return end
+                    local hasSavedLayout = true
+                    for _, bossFrame in ipairs(anchor.bossFrames) do
+                        if not PF.db.positions[bossFrame.settingKey] then
+                            hasSavedLayout = false
+                            break
+                        end
+                    end
+                    if not hasSavedLayout then
+                        for _, bossFrame in ipairs(anchor.bossFrames) do
+                            PF:SaveBossFramePosition(bossFrame)
+                        end
+                    end
+                end,
+                applyOption = function() return PF:ApplyBossGroupLayout() end,
+                refresh = function() return PF:PerformBossGroupLayout() end,
+            },
+            castBar = {
+                getBars = function()
+                    local castBars = {}
+                    for _, bossFrame in ipairs(anchor.bossFrames) do
+                        if bossFrame.castBar then
+                            table.insert(castBars, bossFrame.castBar)
+                        end
+                    end
+                    return castBars
+                end,
+                getHidden = function()
+                    return PF:GetFrameSetting("boss").hideCastBar == true
+                end,
+                setHidden = function(value)
+                    PF:GetFrameSetting("boss").hideCastBar = value == true
+                end,
+            },
+            groupConnectors = {
+                namePrefix = "PrettyFramesBossConnector",
+                storageKey = "bossConnectors",
+                getVisibility = function()
+                    return PF:GetFrameSetting("boss").visibility or "auto"
+                end,
+                isEnabled = function()
+                    return PF.db.replaceBossFrames == true
+                        and anchor.initialized == true
+                end,
+                isConnectorEnabled = function(connector)
+                    local mismatchedSides = connector.upperFrame and connector.lowerFrame
+                        and connector.upperFrame.isMirrored
+                            ~= connector.lowerFrame.isMirrored
+                    return PF.db.bossLayout.independentPositioning ~= true
+                        and not mismatchedSides
+                end,
+                getPairs = function()
+                    local pairs = {}
+                    for index = 1, BOSS_COUNT - 1 do
+                        pairs[index] = {
+                            upper = anchor.bossFrames[index],
+                            lower = anchor.bossFrames[index + 1],
+                        }
+                    end
+                    return pairs
+                end,
+                initializeConnector = function(connector, _, index)
+                    connector:SetSize(unpack(partyLayout.connectorSize))
+                    connector.clipper = CreateFrame("Frame", nil, connector)
+                    connector.clipper:SetFrameLevel(connector:GetFrameLevel())
+                    if index == 1 then
+                        connector.clipper:SetPoint(
+                            "TOPLEFT", connector, "TOPLEFT", 0,
+                            -partyLayout.connectorEndCrop
+                        )
+                        connector.clipper:SetPoint(
+                            "BOTTOMRIGHT", connector, "BOTTOMRIGHT", 0, 0
+                        )
+                    elseif index == BOSS_COUNT - 1 then
+                        connector.clipper:SetPoint(
+                            "TOPLEFT", connector, "TOPLEFT", 0, 0
+                        )
+                        connector.clipper:SetPoint(
+                            "BOTTOMRIGHT", connector, "BOTTOMRIGHT", 0,
+                            partyLayout.connectorEndCrop
+                        )
+                    else
+                        connector.clipper:SetAllPoints(connector)
+                    end
+                    if connector.clipper.SetClipsChildren then
+                        connector.clipper:SetClipsChildren(true)
+                    end
+
+                    connector.texture = connector.clipper:CreateTexture(nil, "BACKGROUND")
+                    connector.texture:SetAllPoints(connector)
+                    connector.texture:SetTexture(
+                        PF:ThemeFrameAsset("boss", "partyConnector", "partyConnector"),
+                        "CLAMP", "REPEAT"
+                    )
+                    local offset = (index - 1) * partyLayout.connectorSampleStep
+                    connector.texture:SetTexCoord(0, 1, offset, 1 + offset)
+                end,
+            },
+        },
+    })
+    self.AuraIndicatorBehavior:RefreshSubject(anchor)
     self:ApplyBossGroupLayout()
     self:ApplyBossFramesVisibility()
 end

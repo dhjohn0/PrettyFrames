@@ -15,9 +15,6 @@ local CreateRaidDebuffContainer = PF.Auras.CreateRaidDebuffContainer
 local CreateRaidMaintenanceContainer = PF.Auras.CreateRaidMaintenanceContainer
 local LayoutCompactAuras = PF.Auras.LayoutCompactAuras
 local themeLayout = PF:ThemeLayout("party")
-local PARTY_ALPHA_UNAVAILABLE = 0.34
-local SetAvailabilityAlpha = PF.Widgets.SetAvailabilityAlpha
-local SetRangeAlpha = PF.Widgets.SetRangeAlpha
 
 local function SetPartyThreat(frame, red, green, blue)
     if red then
@@ -66,45 +63,6 @@ local function ApplyPartyIndicatorLayout(frame, flipped)
     end
 end
 
-local function SetPartyRangeState(frame)
-    local options = PF.db and PF.db.partyLayout
-    -- ApplyFrameVisibility owns the root alpha while arranging or previewing
-    -- frames (including the half-alpha Always Hide preview). Range fading is
-    -- suspended in those modes, so leave that preview alpha untouched.
-    if not options or not PF.db.locked or PF.testMode then return end
-
-    local exists = UnitExists(frame.unit)
-    if not (PF:IsDisplaySafe(exists) and exists == true) then
-        SetAvailabilityAlpha(frame, 1)
-        return
-    end
-
-    local connected = UnitIsConnected(frame.unit)
-    local inPhase = UnitInPhase and UnitInPhase(frame.unit)
-    local unavailable = (PF:IsDisplaySafe(connected) and connected == false)
-        or (PF:IsDisplaySafe(inPhase) and inPhase == false)
-    if unavailable then
-        SetAvailabilityAlpha(frame, PARTY_ALPHA_UNAVAILABLE)
-        return
-    end
-
-    local dead = UnitIsDeadOrGhost(frame.unit)
-    if options.rangeFade ~= false and UnitInRange
-        and PF:IsDisplaySafe(dead) and dead ~= true then
-        SetRangeAlpha(frame, UnitInRange(frame.unit), options.outOfRangeAlpha or 0.55)
-    else
-        SetAvailabilityAlpha(frame, 1)
-    end
-end
-
-function PF:RefreshPartyRangeStates()
-    local anchor = self.frames.party
-    if not anchor or not anchor.partyFrames then return end
-    for _, frame in ipairs(anchor.partyFrames) do
-        SetPartyRangeState(frame)
-    end
-end
-
 local function ApplyPartyLayout(frame, flipped)
     frame.isMirrored = flipped == true
     local crop = themeLayout.artCrop
@@ -118,6 +76,7 @@ local function ApplyPartyLayout(frame, flipped)
     frame.classIndicator:ClearAllPoints()
     frame.roleIndicator:ClearAllPoints()
     frame.statusText:ClearAllPoints()
+    frame.unitLeadershipIndicator:ClearAllPoints()
 
     local points = PF:ResolveThemePoints(themeLayout, flipped)
     PF:SetThemePoint(frame.portrait, frame, points.portrait)
@@ -134,12 +93,14 @@ local function ApplyPartyLayout(frame, flipped)
     frame.classIndicator.ring:SetTexCoord(flipped and 1 or 0, flipped and 0 or 1, 0, 1)
     PF:SetThemePoint(frame.roleIndicator, frame, points.role)
     PF:SetThemePoint(frame.statusText, frame.health, points.status)
+    frame.unitLeadershipIndicator:SetPoint(
+        "CENTER", frame, flipped and "TOPLEFT" or "TOPRIGHT",
+        flipped and 52 or -52, -20
+    )
 
     frame.health:SetReverseFill(flipped == true)
     frame.power:SetReverseFill(flipped == true)
-    if PF.LayoutGroupHealPrediction then
-        PF:LayoutGroupHealPrediction(frame, flipped == true)
-    end
+    PF.HealPredictionBehavior:LayoutFrame(frame, flipped == true)
     ApplyPartyIndicatorLayout(frame, flipped == true)
 end
 
@@ -160,7 +121,6 @@ function PF:CreatePartyUnitFrame(name, unit)
     frame:SetFrameStrata("MEDIUM")
     frame:SetClampedToScreen(true)
     SetSecureUnit(frame, unit)
-    self:RegisterActionFrame(frame, "party")
 
     frame.portrait = CreatePortrait(frame, themeLayout.portraitSize)
     PF:SetThemePoint(frame.portrait, frame, themeLayout.points.portrait)
@@ -203,6 +163,40 @@ function PF:CreatePartyUnitFrame(name, unit)
     frame.unitMarker = CreateUnitMarker(
         frame.textLayer, themeLayout.marker.size, frame.portrait, themeLayout.marker.point
     )
+
+    frame.unitLeadershipIndicator = frame.textLayer:CreateTexture(
+        nil, "OVERLAY", nil, 7
+    )
+    frame.unitLeadershipIndicator:SetSize(20, 20)
+    frame.unitLeadershipIndicator:SetPoint("CENTER", frame, "TOPRIGHT", -52, -20)
+    frame.unitLeadershipIndicator:Hide()
+
+    frame.unitTargetHighlight = CreateFrame("Frame", nil, frame.textLayer)
+    frame.unitTargetHighlight:SetAllPoints(frame)
+    frame.unitTargetHighlight:EnableMouse(false)
+    frame.unitTargetHighlight:Hide()
+    local claspWidth = math.max(16, math.floor(width * 0.055))
+    local claspHeight = math.max(40, math.floor(height * 0.62))
+    frame.unitTargetOrnamentLeft = frame.unitTargetHighlight:CreateTexture(
+        nil, "OVERLAY", nil, 6
+    )
+    frame.unitTargetOrnamentLeft:SetSize(claspWidth, claspHeight)
+    frame.unitTargetOrnamentLeft:SetPoint("LEFT", frame, "LEFT", -3, 0)
+    frame.unitTargetOrnamentLeft:SetTexture(
+        self:ThemeFrameAsset("raid", "raidTargetClasp", "raidTargetClasp")
+    )
+    frame.unitTargetOrnamentRight = frame.unitTargetHighlight:CreateTexture(
+        nil, "OVERLAY", nil, 6
+    )
+    frame.unitTargetOrnamentRight:SetSize(claspWidth, claspHeight)
+    frame.unitTargetOrnamentRight:SetPoint("RIGHT", frame, "RIGHT", 3, 0)
+    frame.unitTargetOrnamentRight:SetTexture(
+        self:ThemeFrameAsset("raid", "raidTargetClasp", "raidTargetClasp")
+    )
+    frame.unitTargetOrnamentRight:SetTexCoord(1, 0, 0, 1)
+
+    frame.unitRoleIndicator = frame.roleIndicator
+    frame.unitRaidMarker = frame.unitMarker
 
     frame.nameText = frame.textLayer:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     frame.nameText:SetPoint("TOPLEFT", frame, "TOPLEFT", 100, -32)
@@ -262,7 +256,7 @@ function PF:CreatePartyUnitFrame(name, unit)
     frame.partyThreatGlow.texture:SetAlpha(0.92)
     SetPartyThreat(frame)
 
-    self:CreateGroupHealPrediction(frame, themeLayout)
+    self.HealPredictionBehavior:CreateFrame(frame, themeLayout)
 
     frame.nativeDebuffs = CreateRaidDebuffContainer(frame, themeLayout.debuffIconSize)
     if frame.nativeDebuffs then
@@ -334,7 +328,6 @@ end
 function PF:UpdatePartyPresentation(frame, exists, previewIndex)
     if not frame.isPartyFrame then return end
     local options = self.db and self.db.partyLayout
-    self:HideGroupHealPrediction(frame)
     SetPartyThreat(frame)
     frame.partyDebuffPreview:Hide()
     for _, indicator in ipairs(frame.partyMaintenancePreview or {}) do indicator:Hide() end
@@ -350,14 +343,6 @@ function PF:UpdatePartyPresentation(frame, exists, previewIndex)
             frame.partyDebuffPreview.count:SetText("")
             frame.partyDebuffPreview:SetBackdropBorderColor(0.25, 0.72, 1.00, 1)
             frame.partyDebuffPreview:Show()
-        elseif previewIndex == 3 and options.showPredictions ~= false then
-            local prediction = frame.groupPrediction
-            for _, segment in ipairs(prediction.segments) do segment:SetMinMaxValues(0, 100) end
-            prediction.myHeals:SetValue(16)
-            prediction.otherHeals:SetValue(10)
-            prediction.absorbs:SetValue(18)
-            prediction.healAbsorbs:SetValue(12)
-            for _, segment in ipairs(prediction.segments) do segment:Show() end
         elseif previewIndex == 4 then
             if options.showMaintenance ~= false then
                 for _, indicator in ipairs(frame.partyMaintenancePreview or {}) do indicator:Show() end
@@ -380,7 +365,25 @@ function PF:UpdatePartyPresentation(frame, exists, previewIndex)
             end
         end
     end
-    self:UpdateGroupHealPrediction(frame, options)
+end
+
+local function BuildPartyUnitOrder()
+    local units = {}
+    if IsInRaid and IsInRaid() then
+        local groupSize = GetNumGroupMembers and GetNumGroupMembers() or 0
+        for raidIndex = 1, groupSize do
+            local raidUnit = "raid" .. raidIndex
+            local isPlayer = UnitIsUnit and UnitIsUnit(raidUnit, "player")
+            if not (PF:IsDisplaySafe(isPlayer) and isPlayer == true) then
+                table.insert(units, raidUnit)
+                if #units == 4 then break end
+            end
+        end
+    end
+    for index = 1, 4 do
+        units[index] = units[index] or ("party" .. index)
+    end
+    return units
 end
 
 function PF:CreatePartyFrames()
@@ -390,7 +393,6 @@ function PF:CreatePartyFrames()
     self.frames.party = anchor
     self:PlaceFrame(anchor, "party")
     self:MakeMovable(anchor, "party")
-    RegisterStateDriver(anchor, "visibility", "[group:raid] hide; show")
 
     anchor.partyFrames = {}
     for index = 1, 4 do
@@ -400,80 +402,207 @@ function PF:CreatePartyFrames()
         anchor.partyFrames[index] = frame
     end
 
-    anchor.rangeUpdateElapsed = 0
-    anchor:SetScript("OnUpdate", function(widget, elapsed)
-        local options = PF.db and PF.db.partyLayout
-        if not options or not widget:IsShown() or not PF.db.locked or PF.testMode
-            or options.visibility == "hide" or (widget.partyActiveCount or 0) == 0 then
-            widget.rangeUpdateElapsed = 0
-            return
-        end
-        widget.rangeUpdateElapsed = widget.rangeUpdateElapsed + elapsed
-        if widget.rangeUpdateElapsed < 0.5 then return end
-        widget.rangeUpdateElapsed = 0
-        PF:RefreshPartyRangeStates()
-    end)
+    self.FrameBehaviors:AttachGroup(anchor, {
+        kind = "party",
+        getFrames = function() return anchor.partyFrames end,
+        getOptions = function() return PF.db and PF.db.partyLayout end,
+        behaviors = {
+            outOfRange = {
+                fadeLabel = "Fade Out-of-Range Members",
+            },
+            actions = {
+                category = "party",
+            },
+            healthText = {
+                getMode = function() return PF.db.partyLayout.healthTextMode end,
+                setMode = function(value) PF.db.partyLayout.healthTextMode = value end,
+                getColorMode = function() return PF.db.partyLayout.healthColorMode end,
+                setColorMode = function(value) PF.db.partyLayout.healthColorMode = value end,
+                getBackgroundAlpha = function()
+                    return PF.db.partyLayout.healthBackgroundAlpha
+                end,
+                setBackgroundAlpha = function(value)
+                    PF.db.partyLayout.healthBackgroundAlpha = value
+                end,
+                getSparkShown = function() return PF.db.partyLayout.healthSpark ~= false end,
+                setSparkShown = function(value) PF.db.partyLayout.healthSpark = value == true end,
+                getIncomingHeals = function()
+                    return PF.db.partyLayout.accountForIncomingHeals == true
+                end,
+                setIncomingHeals = function(value)
+                    PF.db.partyLayout.accountForIncomingHeals = value == true
+                end,
+                getIncomingHealAmount = function(frame, healthMax, testMode)
+                    return PF:GetGroupIncomingHeals(frame, healthMax, testMode)
+                end,
+                markChanged = function()
+                    PF.DisplayProfileBehavior:MarkCustom(anchor)
+                end,
+                refresh = function() return PF:RefreshPartyFrames(false) end,
+            },
+            healPrediction = true,
+            powerBar = {
+                getMode = function() return PF.db.partyLayout.powerTextMode end,
+                setMode = function(value) PF.db.partyLayout.powerTextMode = value end,
+                getColorMode = function() return PF.db.partyLayout.powerColorMode end,
+                setColorMode = function(value) PF.db.partyLayout.powerColorMode = value end,
+                getBackgroundAlpha = function()
+                    return PF.db.partyLayout.powerBackgroundAlpha
+                end,
+                setBackgroundAlpha = function(value)
+                    PF.db.partyLayout.powerBackgroundAlpha = value
+                end,
+                getSparkShown = function() return PF.db.partyLayout.powerSpark ~= false end,
+                setSparkShown = function(value) PF.db.partyLayout.powerSpark = value == true end,
+                apply = function() return PF:RefreshPartyFrames(false) end,
+            },
+            scale = {
+                getScale = function() return PF.db.partyLayout.scale or 1 end,
+                setScale = function(value) PF.db.partyLayout.scale = value end,
+                apply = function() PF:RefreshScale() end,
+            },
+            visibility = {
+                getVisibility = function()
+                    return PF.db.partyLayout.visibility or "auto"
+                end,
+                setVisibility = function(value) PF.db.partyLayout.visibility = value end,
+                apply = function() PF:ApplyPartyGroupVisibility() end,
+                isEnabled = function()
+                    return PF.db.replacePartyFrames ~= false
+                end,
+                getStateVisibility = function()
+                    local raidOptions = PF.db.raidLayout
+                    local inGroup = IsInGroup and IsInGroup()
+                    local inRaid = IsInRaid and IsInRaid()
+                    local useSmallRaidParty = PF:ShouldUsePartyFramesForSmallRaid()
+                    local showParty
+                    if inRaid then
+                        showParty = useSmallRaidParty
+                            or PF.db.partyLayout.hideInRaid ~= true
+                    else
+                        showParty = not (raidOptions.useInParty and inGroup)
+                    end
+                    return showParty and "show" or "hide"
+                end,
+                getStateDriver = function()
+                    local partyOptions = PF.db.partyLayout
+                    local raidOptions = PF.db.raidLayout
+                    local raidState = PF:ShouldUsePartyFramesForSmallRaid()
+                        or partyOptions.hideInRaid ~= true
+                    local partyState = raidOptions.useInParty and "hide" or "show"
+                    if anchor.prettyFramesBindingMode == "raid" then
+                        -- These secure buttons currently target raidN. Keep
+                        -- them hidden if combat changes the group back to a
+                        -- party; protected unit attributes update at regen.
+                        return ("[group:raid] %s; hide"):format(
+                            raidState and "show" or "hide"
+                        )
+                    end
+                    -- partyN bindings are safe to keep through party state
+                    -- changes, but must never be exposed as raid-member rows.
+                    return ("[group:raid] hide; [group] %s; show"):format(partyState)
+                end,
+            },
+            auraIndicators = {
+                applyLayout = function() return PF:PerformPartyAuraLayout() end,
+            },
+            threat = true,
+            unitIndicators = {
+                showDamageRole = true,
+                setStatusText = function(frame, text)
+                    frame.statusText:SetText(text)
+                end,
+            },
+            displayProfile = {
+                profileSet = "party",
+                refresh = function()
+                    PF.AuraIndicatorBehavior:RefreshSubject(anchor)
+                end,
+            },
+            groupUsage = {
+                apply = function()
+                    PF:ApplyPartyUnitBindings()
+                    return PF:ApplyGroupStateDrivers()
+                end,
+            },
+            groupUnitBinding = {
+                getUnits = function()
+                    anchor.prettyFramesBindingMode = IsInRaid and IsInRaid()
+                        and "raid" or "party"
+                    return BuildPartyUnitOrder()
+                end,
+                afterApply = function()
+                    local result = PF:ApplyPartyGroupLayout()
+                    PF:ApplyGroupStateDrivers()
+                    return result
+                end,
+            },
+            groupLayout = {
+                refresh = function() return PF:PerformPartyGroupLayout() end,
+                applyOption = function() return PF:ApplyPartyGroupLayout() end,
+            },
+            groupConnectors = {
+                namePrefix = "PrettyFramesPartyConnector",
+                storageKey = "partyConnectors",
+                getVisibility = function()
+                    return PF.db.partyLayout.visibility or "auto"
+                end,
+                isEnabled = function()
+                    return PF.db.replacePartyFrames ~= false
+                end,
+                getPairs = function()
+                    local pairs = {}
+                    for index = 1, 3 do
+                        pairs[index] = {
+                            upper = anchor.partyFrames[index],
+                            lower = anchor.partyFrames[index + 1],
+                        }
+                    end
+                    return pairs
+                end,
+                initializeConnector = function(connector, _, index)
+                    local upper = connector.upperFrame
+                    connector:SetSize(unpack(themeLayout.connectorSize))
+                    PF:SetThemePoint(connector, upper, themeLayout.connectorPoint)
+                    connector:SetFrameLevel(upper:GetFrameLevel() + 1)
 
-    -- Each connector is parented to the upper party frame and unit-watches the
-    -- lower one. The parent/child relationship plus the second unit watch means
-    -- it can only render when both adjacent frames are present, including combat.
-    anchor.partyConnectors = {}
-    for index = 1, 3 do
-        local upper = anchor.partyFrames[index]
-        local lower = anchor.partyFrames[index + 1]
-        local connector = CreateFrame("Button", "PrettyFramesPartyConnector" .. index, upper, "SecureUnitButtonTemplate")
-        -- Keep the texture's native 1:2 aspect ratio so its leaves and bronze
-        -- curls are not distorted. The overlap is hidden behind the frame art
-        -- and helps adjacent sections read as one continuous vine.
-        connector:SetSize(unpack(themeLayout.connectorSize))
-        PF:SetThemePoint(connector, upper, themeLayout.connectorPoint)
-        connector:SetFrameLevel(upper:GetFrameLevel() + 1)
-        connector:EnableMouse(false)
-        connector:SetAttribute("unit", lower.unit)
+                    connector.clipper = CreateFrame("Frame", nil, connector)
+                    connector.clipper:SetFrameLevel(connector:GetFrameLevel())
+                    if index == 1 then
+                        connector.clipper:SetPoint(
+                            "TOPLEFT", connector, "TOPLEFT", 0,
+                            -themeLayout.connectorEndCrop
+                        )
+                        connector.clipper:SetPoint(
+                            "BOTTOMRIGHT", connector, "BOTTOMRIGHT", 0, 0
+                        )
+                    elseif index == 3 then
+                        connector.clipper:SetPoint(
+                            "TOPLEFT", connector, "TOPLEFT", 0, 0
+                        )
+                        connector.clipper:SetPoint(
+                            "BOTTOMRIGHT", connector, "BOTTOMRIGHT", 0,
+                            themeLayout.connectorEndCrop
+                        )
+                    else
+                        connector.clipper:SetAllPoints(connector)
+                    end
+                    if connector.clipper.SetClipsChildren then
+                        connector.clipper:SetClipsChildren(true)
+                    end
 
-        -- Crop the exposed ends at the first and last portrait centerlines. The
-        -- actual texture remains full-sized inside this clipping frame, so the
-        -- artwork is cut rather than rescaled or distorted.
-        connector.clipper = CreateFrame("Frame", nil, connector)
-        -- Child frames normally rise one frame level above their parent. Keep
-        -- this wrapper at the connector's level so the vine remains beneath
-        -- the portraits and foreground frame artwork.
-        connector.clipper:SetFrameLevel(connector:GetFrameLevel())
-        if index == 1 then
-            connector.clipper:SetPoint("TOPLEFT", connector, "TOPLEFT", 0, -themeLayout.connectorEndCrop)
-            connector.clipper:SetPoint("BOTTOMRIGHT", connector, "BOTTOMRIGHT", 0, 0)
-        elseif index == 3 then
-            connector.clipper:SetPoint("TOPLEFT", connector, "TOPLEFT", 0, 0)
-            connector.clipper:SetPoint("BOTTOMRIGHT", connector, "BOTTOMRIGHT", 0, themeLayout.connectorEndCrop)
-        else
-            connector.clipper:SetAllPoints(connector)
-        end
-        if connector.clipper.SetClipsChildren then
-            connector.clipper:SetClipsChildren(true)
-        end
-
-        connector.texture = connector.clipper:CreateTexture(nil, "BACKGROUND")
-        connector.texture:SetPoint("TOPLEFT", connector, "TOPLEFT", 0, 0)
-        connector.texture:SetPoint("BOTTOMRIGHT", connector, "BOTTOMRIGHT", 0, 0)
-        connector.texture:SetTexture(
-            self:ThemeFrameAsset("party", "partyConnector", "partyConnector"), "CLAMP", "REPEAT"
-        )
-        -- Sample a different wrapped section for every gap. Each window remains
-        -- exactly one texture-height tall, preserving the artwork's aspect ratio.
-        local verticalOffset = (index - 1) * themeLayout.connectorSampleStep
-        connector.texture:SetTexCoord(0, 1, verticalOffset, 1 + verticalOffset)
-
-        connector.upperFrame = upper
-        connector.lowerFrame = lower
-        RegisterUnitWatch(connector)
-        anchor.partyConnectors[index] = connector
-    end
-
-    for _, frame in ipairs(anchor.partyFrames) do
-        frame.OnVisibilityApplied = function()
-            PF:UpdatePartyConnectors()
-        end
-    end
+                    connector.texture = connector.clipper:CreateTexture(nil, "BACKGROUND")
+                    connector.texture:SetAllPoints(connector)
+                    connector.texture:SetTexture(
+                        PF:ThemeFrameAsset("party", "partyConnector", "partyConnector"),
+                        "CLAMP", "REPEAT"
+                    )
+                    local offset = (index - 1) * themeLayout.connectorSampleStep
+                    connector.texture:SetTexCoord(0, 1, offset, 1 + offset)
+                end,
+            },
+        },
+    })
 
     anchor.moveHandle:SetScript("OnMouseUp", function(handle, mouseButton)
         if mouseButton == "RightButton" then
@@ -482,18 +611,12 @@ function PF:CreatePartyFrames()
     end)
 
     self:ApplyPartyUnitBindings()
-    self:ApplyPartyAuraLayout()
+    self.AuraIndicatorBehavior:RefreshSubject(anchor)
 end
 
-function PF:ApplyPartyAuraLayout()
+function PF:PerformPartyAuraLayout()
     local anchor = self.frames.party
     if not anchor or not anchor.partyFrames then return end
-    if InCombatLockdown() then
-        self.pendingPartyAuraLayout = true
-        return false
-    end
-
-    self.pendingPartyAuraLayout = nil
     local leftSide = self.db.partyLayout.aurasLeft == true
     for _, frame in ipairs(anchor.partyFrames) do
         LayoutPartyAuras(frame, leftSide)
@@ -529,15 +652,9 @@ local function PartyFrameName(frame)
     return PF:IsDisplaySafe(name) and name:lower() or ""
 end
 
-function PF:ApplyPartyGroupLayout()
+function PF:PerformPartyGroupLayout()
     local anchor = self.frames.party
     if not anchor or not anchor.partyFrames then return end
-    if InCombatLockdown() then
-        self.pendingPartyLayout = true
-        return false
-    end
-
-    self.pendingPartyLayout = nil
     local options = self.db.partyLayout
     local ordered = {}
     for _, frame in ipairs(anchor.partyFrames) do
@@ -619,29 +736,29 @@ function PF:ApplyPartyGroupLayout()
     -- position from the Party anchor and a possibly stale active count.
     anchor.moveHandle:SetPoint("BOTTOMLEFT", ordered[1], "TOPLEFT", 0, 5)
 
-    for index, connector in ipairs(anchor.partyConnectors or {}) do
-        local first = ordered[index]
-        local second = ordered[index + 1]
-        UnregisterUnitWatch(connector)
-        connector:SetParent(first)
+    local pairs = {}
+    for index = 1, #ordered - 1 do
+        pairs[index] = { upper = ordered[index], lower = ordered[index + 1] }
+    end
+    return self.GroupConnectorBehavior:Relink(anchor, pairs, function(connector, _, index)
+        local first = connector.upperFrame
         connector:ClearAllPoints()
         PF:SetThemePoint(connector, first, themeLayout.connectorPoint)
         connector:SetFrameLevel(first:GetFrameLevel() + 1)
         connector.clipper:SetFrameLevel(connector:GetFrameLevel())
-        connector:SetAttribute("unit", second.unit)
-        connector.upperFrame = first
-        connector.lowerFrame = second
 
         connector.clipper:ClearAllPoints()
         local cropTop = index == 1
         local cropBottom = index == math.max(activeCount - 1, 1)
         local endCrop = themeLayout.connectorEndCrop
-        connector.clipper:SetPoint("TOPLEFT", connector, "TOPLEFT", 0, cropTop and -endCrop or 0)
-        connector.clipper:SetPoint("BOTTOMRIGHT", connector, "BOTTOMRIGHT", 0, cropBottom and endCrop or 0)
-    end
-
-    self:UpdatePartyConnectors()
-    return true
+        connector.clipper:SetPoint(
+            "TOPLEFT", connector, "TOPLEFT", 0, cropTop and -endCrop or 0
+        )
+        connector.clipper:SetPoint(
+            "BOTTOMRIGHT", connector, "BOTTOMRIGHT", 0,
+            cropBottom and endCrop or 0
+        )
+    end)
 end
 
 function PF:OpenPartyContextMenu(owner)
@@ -651,153 +768,9 @@ function PF:OpenPartyContextMenu(owner)
         return
     end
 
-    local options = self.db.partyLayout
     MenuUtil.CreateContextMenu(owner, function(_, rootDescription)
         rootDescription:CreateTitle("Party Frames")
-        rootDescription:CreateButton("Actions...", function()
-            PF:OpenActionsWindow("party")
-        end)
-        rootDescription:CreateDivider()
-        PF:AddScaleMenuOption(rootDescription, options.scale or 1, function(value)
-            options.scale = value
-            PF:RefreshScale()
-        end)
-        local profileMenu = rootDescription:CreateButton("Display Profile")
-        local function IsProfileSelected(value)
-            return options.displayProfile == value
-        end
-        local function SetProfileSelected(value)
-            PF:ApplyPartyDisplayProfile(value)
-        end
-        profileMenu:CreateRadio("Balanced", IsProfileSelected, SetProfileSelected, "balanced")
-        profileMenu:CreateRadio("Healer", IsProfileSelected, SetProfileSelected, "healer")
-        profileMenu:CreateRadio("Minimal", IsProfileSelected, SetProfileSelected, "minimal")
-        if options.displayProfile == "custom" then
-            profileMenu:CreateRadio("Custom", IsProfileSelected, function() end, "custom")
-        end
-
-        PF:AddVisibilityMenuOption(rootDescription, function()
-            return options.visibility or "auto"
-        end, function(value)
-            options.visibility = value
-            PF:ApplyPartyGroupVisibility()
-        end)
-        local layoutMenu = rootDescription:CreateButton("Layout")
-        local indicatorMenu = rootDescription:CreateButton("Auras & Indicators")
-        local rangeMenu = rootDescription:CreateButton("Range")
-        local groupMenu = rootDescription:CreateButton("Group Usage")
-
-        local function ToggleIndicator(key)
-            options[key] = options[key] == false
-            options.displayProfile = "custom"
-            PF:ApplyPartyIndicatorFilters()
-            PF:RefreshPartyFrames(false)
-        end
-        indicatorMenu:CreateCheckbox("Primary Debuff", function()
-            return options.showDebuffs ~= false
-        end, function()
-            ToggleIndicator("showDebuffs")
-        end)
-        indicatorMenu:CreateCheckbox("Prioritize Dispellable Debuffs", function()
-            return options.showDispellableDebuffs ~= false
-        end, function()
-            ToggleIndicator("showDispellableDebuffs")
-        end)
-        indicatorMenu:CreateCheckbox("Incoming Heals & Absorbs", function()
-            return options.showPredictions ~= false
-        end, function()
-            ToggleIndicator("showPredictions")
-        end)
-        indicatorMenu:CreateCheckbox("Maintenance Effects", function()
-            return options.showMaintenance ~= false
-        end, function()
-            ToggleIndicator("showMaintenance")
-        end)
-        indicatorMenu:CreateCheckbox("Threat Warning", function()
-            return options.showThreat ~= false
-        end, function()
-            ToggleIndicator("showThreat")
-        end)
-        indicatorMenu:CreateDivider()
-        indicatorMenu:CreateTitle("Aura Placement")
-        indicatorMenu:CreateRadio("Left", function()
-            return options.aurasLeft == true
-        end, function()
-            options.aurasLeft = true
-            PF:ApplyPartyAuraLayout()
-        end)
-        indicatorMenu:CreateRadio("Right", function()
-            return options.aurasLeft ~= true
-        end, function()
-            options.aurasLeft = false
-            PF:ApplyPartyAuraLayout()
-        end)
-
-        groupMenu:CreateCheckbox("Use in Small Raids", function()
-            return options.useInSmallRaid == true
-        end, function()
-            if InCombatLockdown() then
-                PF:Print("party raid behavior cannot change during combat.")
-                return
-            end
-            options.useInSmallRaid = not options.useInSmallRaid
-            PF:ApplyPartyUnitBindings()
-            PF:ApplyGroupStateDrivers()
-        end)
-        groupMenu:CreateCheckbox("Hide in Raid Groups", function()
-            return options.hideInRaid == true
-        end, function()
-            if InCombatLockdown() then
-                PF:Print("party raid behavior cannot change during combat.")
-                return
-            end
-            options.hideInRaid = not options.hideInRaid
-            PF:ApplyPartyUnitBindings()
-            PF:ApplyGroupStateDrivers()
-        end)
-        layoutMenu:CreateTitle("Growth Direction")
-        layoutMenu:CreateRadio("Down", function()
-            return options.growUpwards ~= true
-        end, function()
-            options.growUpwards = false
-            PF:ApplyPartyGroupLayout()
-        end)
-        layoutMenu:CreateRadio("Up", function()
-            return options.growUpwards == true
-        end, function()
-            options.growUpwards = true
-            PF:ApplyPartyGroupLayout()
-        end)
-
-        rangeMenu:CreateCheckbox("Fade Out-of-Range Members", function()
-            return options.rangeFade ~= false
-        end, function()
-            options.rangeFade = options.rangeFade == false
-            PF:RefreshPartyRangeStates()
-        end)
-        local function IsRangeAlphaSelected(value)
-            return options.outOfRangeAlpha == value
-        end
-        local function SetRangeAlphaSelected(value)
-            options.outOfRangeAlpha = value
-            PF:RefreshPartyRangeStates()
-        end
-        rangeMenu:CreateRadio("Dim (35%)", IsRangeAlphaSelected, SetRangeAlphaSelected, 0.35)
-        rangeMenu:CreateRadio("Readable (55%)", IsRangeAlphaSelected, SetRangeAlphaSelected, 0.55)
-        rangeMenu:CreateRadio("Subtle (75%)", IsRangeAlphaSelected, SetRangeAlphaSelected, 0.75)
-
-        layoutMenu:CreateDivider()
-        layoutMenu:CreateTitle("Sort Order")
-        local function IsSelected(value)
-            return options.sort == value
-        end
-        local function SetSelected(value)
-            options.sort = value
-            PF:ApplyPartyGroupLayout()
-        end
-        layoutMenu:CreateRadio("Party Order", IsSelected, SetSelected, "index")
-        layoutMenu:CreateRadio("Role", IsSelected, SetSelected, "role")
-        layoutMenu:CreateRadio("Name", IsSelected, SetSelected, "name")
+        PF.FrameBehaviors:AddContextMenus(rootDescription, PF.frames.party, "move")
     end)
 end
 
@@ -809,7 +782,6 @@ function PF:ApplyPartyGroupVisibility()
         self:UpdateUnitFrame(frame, true)
     end
     self:ApplyPartyGroupLayout()
-    self:RefreshPartyRangeStates()
 end
 
 function PF:ShouldUsePartyFramesForSmallRaid()
@@ -819,83 +791,5 @@ function PF:ShouldUsePartyFramesForSmallRaid()
 
     local groupSize = GetNumGroupMembers and GetNumGroupMembers() or 0
     return groupSize > 0 and groupSize <= 5
-end
-
-function PF:ApplyPartyUnitBindings()
-    local anchor = self.frames.party
-    if not anchor or not anchor.partyFrames then return end
-    if InCombatLockdown() then
-        self.pendingPartyUnitBindings = true
-        return false
-    end
-
-    local desiredUnits = {}
-    if IsInRaid and IsInRaid() then
-        local groupSize = GetNumGroupMembers and GetNumGroupMembers() or 0
-        for raidIndex = 1, groupSize do
-            local raidUnit = "raid" .. raidIndex
-            local isPlayer = UnitIsUnit and UnitIsUnit(raidUnit, "player")
-            if not (self:IsDisplaySafe(isPlayer) and isPlayer == true) then
-                table.insert(desiredUnits, raidUnit)
-                if #desiredUnits == 4 then break end
-            end
-        end
-    end
-
-    for index, frame in ipairs(anchor.partyFrames) do
-        local unit = desiredUnits[index] or ("party" .. index)
-        if frame.unit ~= unit then
-            UnregisterUnitWatch(frame)
-            frame.unit = unit
-            frame:SetAttribute("unit", unit)
-            for _, holder in ipairs({ frame.nativeBuffs, frame.nativeDebuffs, frame.nativeMaintenance }) do
-                if holder and holder.container then
-                    holder.container:SetUnit(unit)
-                end
-            end
-        end
-        self:ApplyFrameVisibility(frame)
-        self:UpdateUnitFrame(frame, true)
-    end
-
-    self.pendingPartyUnitBindings = nil
-    self:ApplyPartyGroupLayout()
-    self:RefreshPartyRangeStates()
-    return true
-end
-
-function PF:UpdatePartyConnectors()
-    local anchor = self.frames.party
-    if not anchor or not anchor.partyConnectors or InCombatLockdown() then return end
-
-    for _, connector in ipairs(anchor.partyConnectors) do
-        local partyVisibility = self.db.partyLayout and self.db.partyLayout.visibility or "auto"
-        local upperSetting = { visibility = partyVisibility }
-        local lowerSetting = upperSetting
-        local editing = self.db and not self.db.locked
-
-        if editing then
-            UnregisterUnitWatch(connector)
-            local hiddenPreview = (upperSetting and upperSetting.visibility == "hide")
-                or (lowerSetting and lowerSetting.visibility == "hide")
-            connector:SetAlpha(hiddenPreview and 0.5 or 1)
-            connector:Show()
-        elseif lowerSetting and lowerSetting.visibility == "hide" then
-            UnregisterUnitWatch(connector)
-            connector:SetAlpha(1)
-            connector:Hide()
-        elseif self.testMode then
-            UnregisterUnitWatch(connector)
-            connector:SetAlpha(1)
-            connector:Show()
-        elseif lowerSetting and lowerSetting.visibility == "show" then
-            UnregisterUnitWatch(connector)
-            connector:SetAlpha(1)
-            connector:Show()
-        else
-            connector:SetAlpha(1)
-            RegisterUnitWatch(connector)
-        end
-    end
 end
 

@@ -284,7 +284,7 @@ function PF:CreateUnifiedPlayerFrame()
     frame:SetFrameStrata("MEDIUM")
     frame:SetClampedToScreen(true)
     SetSecureUnit(frame, "player")
-    self:RegisterActionFrame(frame, "player")
+    self.FrameBehaviors:Attach("actions", frame, { category = "player" })
 
     frame.isAnchor = true
     self.frames.player = frame
@@ -418,7 +418,7 @@ function PF:CreateUnifiedPlayerFrame()
     pet:SetFrameLevel(frame:GetFrameLevel() + 1)
     pet:SetClampedToScreen(true)
     SetSecureUnit(pet, "pet")
-    self:RegisterActionFrame(pet, "pet")
+    self.FrameBehaviors:Attach("actions", pet, { category = "pet" })
 
     pet.portrait = CreatePortrait(pet, petLayout.portraitSize)
     PF:SetThemePoint(pet.portrait, pet, petPoints.portrait)

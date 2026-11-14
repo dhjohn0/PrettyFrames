@@ -6,11 +6,6 @@ PF.unitFrames = {}
 PF.contextFrames = {}
 PF.configurableFrames = {}
 PF.suppressedFrames = setmetatable({}, { __mode = "k" })
-PF.pendingVisibilityFrames = setmetatable({}, { __mode = "k" })
-PF.pendingFrameFlips = setmetatable({}, { __mode = "k" })
-PF.pendingFrameScales = setmetatable({}, { __mode = "k" })
-PF.actionFrames = setmetatable({}, { __mode = "k" })
-
 PF.MAX_AURAS = 40
 PF.MIN_SCALE = 0.6
 PF.MAX_SCALE = 1.6

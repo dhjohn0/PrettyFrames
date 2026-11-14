@@ -252,7 +252,11 @@ function PF:CreateOrnateUnitFrame(name, unit, width, height, positionKey, mirror
     frame:SetFrameStrata("MEDIUM")
     frame:SetClampedToScreen(true)
     SetSecureUnit(frame, unit)
-    self:RegisterActionFrame(frame, options.actionCategory or positionKey or unit)
+    if not options.skipActionBehavior then
+        self.FrameBehaviors:Attach("actions", frame, {
+            category = options.actionCategory or positionKey or unit,
+        })
+    end
     frame.layoutWidth = width
     frame.layoutHeight = height
     frame.defaultMirrored = mirrored == true
@@ -515,8 +519,6 @@ function PF:CreateOrnateUnitFrame(name, unit, width, height, positionKey, mirror
     if options.settingKey then frame.settingKey = options.settingKey end
     if not options.skipContextMenu then
         self:RegisterFrameContextMenu(frame, options.settingKey or positionKey or unit)
-    elseif self.ApplyActionsToFrame then
-        self:ApplyActionsToFrame(frame)
     end
 
     table.insert(self.unitFrames, frame)

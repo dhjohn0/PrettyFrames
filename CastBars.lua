@@ -343,46 +343,51 @@ local function CreateUnitCastBar(
     return castBar
 end
 
+function PF:RefreshCastBarDisplay(castBar)
+    if not castBar then return end
+    local owner = castBar.ownerFrame
+    local settingKey = owner and (owner.castBarSettingKey or owner.settingKey)
+    local setting = settingKey and self:GetFrameSetting(settingKey)
+    local hidden = setting and setting.hideCastBar == true
+
+    castBar.showCastbar = not hidden
+    if hidden then
+        if castBar.interruptibleGlow then castBar.interruptibleGlow:Hide() end
+        castBar:Hide()
+    end
+    local showPreview = false
+    if castBar.preview then
+        showPreview = (self.testMode == true or self.db.locked == false) and not hidden
+        castBar.preview:SetShown(showPreview)
+        if showPreview and castBar.interruptibleGlow then
+            -- The live glow is a sibling layer and is not clipped by the
+            -- StatusBar fill. Reuse it for the identically anchored test
+            -- bar instead of maintaining a second clipped preview glow.
+            -- Show it on Player previews as well so every theme can be
+            -- visually checked; live Player casts remain suppressed.
+            -- The preview StatusBar sits one level above the live bar and
+            -- its ornament sits two levels above preview. Raise the glow
+            -- above both so the additive signal is never occluded.
+            castBar.interruptibleGlow:SetFrameLevel(
+                castBar.preview:GetFrameLevel() + 3
+            )
+            castBar.interruptibleGlow:SetAlpha(GetInterruptGlowAlpha())
+            castBar.interruptibleGlow:Show()
+        elseif castBar.interruptibleGlow then
+            castBar.interruptibleGlow:Hide()
+        end
+    end
+    if not hidden and not showPreview then
+        if castBar.interruptibleGlow then
+            castBar.interruptibleGlow:SetFrameLevel(castBar:GetFrameLevel() + 4)
+        end
+        RefreshUnitCastBar(castBar)
+    end
+end
+
 function PF:RefreshCastBarPreviews()
     for _, castBar in ipairs(self.castBars or {}) do
-        local owner = castBar.ownerFrame
-        local settingKey = owner and (owner.castBarSettingKey or owner.settingKey)
-        local setting = settingKey and self:GetFrameSetting(settingKey)
-        local hidden = setting and setting.hideCastBar == true
-
-        castBar.showCastbar = not hidden
-        if hidden then
-            if castBar.interruptibleGlow then castBar.interruptibleGlow:Hide() end
-            castBar:Hide()
-        end
-        local showPreview = false
-        if castBar.preview then
-            showPreview = (self.testMode == true or self.db.locked == false) and not hidden
-            castBar.preview:SetShown(showPreview)
-            if showPreview and castBar.interruptibleGlow then
-                -- The live glow is a sibling layer and is not clipped by the
-                -- StatusBar fill. Reuse it for the identically anchored test
-                -- bar instead of maintaining a second clipped preview glow.
-                -- Show it on Player previews as well so every theme can be
-                -- visually checked; live Player casts remain suppressed.
-                -- The preview StatusBar sits one level above the live bar and
-                -- its ornament sits two levels above preview. Raise the glow
-                -- above both so the additive signal is never occluded.
-                castBar.interruptibleGlow:SetFrameLevel(
-                    castBar.preview:GetFrameLevel() + 3
-                )
-                castBar.interruptibleGlow:SetAlpha(GetInterruptGlowAlpha())
-                castBar.interruptibleGlow:Show()
-            elseif castBar.interruptibleGlow then
-                castBar.interruptibleGlow:Hide()
-            end
-        end
-        if not hidden and not showPreview then
-            if castBar.interruptibleGlow then
-                castBar.interruptibleGlow:SetFrameLevel(castBar:GetFrameLevel() + 4)
-            end
-            RefreshUnitCastBar(castBar)
-        end
+        self:RefreshCastBarDisplay(castBar)
     end
 end
 

@@ -7,113 +7,13 @@ function PF:SetLocked(locked, silent)
     end
     self.db.locked = locked
     if locked and self.actionsWindow then self.actionsWindow:Hide() end
-    if self.ApplyGroupStateDrivers then
-        self:ApplyGroupStateDrivers()
-    end
-    for _, frame in pairs(self.frames) do
-        if frame.moveLabel then
-            frame.moveLabel:SetShown(not locked)
-        end
-        if frame.moveHandle then
-            frame.moveHandle:SetShown(not locked)
-        end
-    end
-    if self.ApplyAllActionBindings then self:ApplyAllActionBindings() end
-    for _, castBar in ipairs(self.castBars or {}) do
-        castBar:EnableMouse(not locked)
-        if castBar.preview then
-            castBar.preview:EnableMouse(not locked)
-        end
-    end
-    for _, display in ipairs(self.classResourceDisplays or {}) do
-        if display.bar then display.bar:EnableMouse(not locked) end
-    end
-    for _, frame in ipairs(self.configurableFrames) do
-        self:ApplyFrameVisibility(frame)
-    end
-    -- Unlocking previews every Party slot, while locking returns to the live
-    -- roster. Rebuild the layout before updating connectors so the move handle
-    -- and first/last vine crops use the new preview population immediately.
-    if self.ApplyPartyGroupLayout then
-        self:ApplyPartyGroupLayout()
-    end
-    if self.RefreshCastBarPreviews then
-        self:RefreshCastBarPreviews()
-    end
-    if self.ApplyRaidGroupLayout then
-        self:ApplyRaidGroupLayout()
-    end
-    if self.ApplyBossGroupLayout then
-        self:ApplyBossGroupLayout()
-    end
-    if self.UpdatePartyConnectors then
-        self:UpdatePartyConnectors()
-    end
-    if self.UpdateRaidConnectors then
-        self:UpdateRaidConnectors()
-    end
+    self.FrameBehaviors:NotifyEditModeChanged(not locked, self.testMode, "lock")
     if self.RefreshAllFrames then
         self:RefreshAllFrames()
-    end
-    if self.RefreshPartyRangeStates then
-        self:RefreshPartyRangeStates()
     end
     if not silent then
         self:Print(locked and "frames locked." or "frames unlocked; drag to move or right-click a frame for display options.")
     end
-    return true
-end
-
-function PF:ApplyGroupStateDrivers()
-    local party = self.frames.party
-    local raid = self.frames.raid
-    if not party or not raid then return end
-    if InCombatLockdown() then
-        self.pendingGroupStateDrivers = true
-        return false
-    end
-
-    UnregisterStateDriver(party, "visibility")
-    UnregisterStateDriver(raid, "visibility")
-
-    local partyEnabled = self.db.replacePartyFrames ~= false
-    local raidEnabled = self.db.replaceRaidFrames ~= false
-
-    -- Keep both groups available while arranging or previewing. Individual
-    -- Always Hide settings still control their child unit frames.
-    if self.testMode or not self.db.locked then
-        party:SetShown(partyEnabled)
-        raid:SetShown(raidEnabled)
-        self.pendingGroupStateDrivers = nil
-        return true
-    end
-
-    local options = self.db.raidLayout
-    local inGroup = IsInGroup and IsInGroup()
-    local inRaid = IsInRaid and IsInRaid()
-    local useSmallRaidParty = self.ShouldUsePartyFramesForSmallRaid
-        and self:ShouldUsePartyFramesForSmallRaid()
-    local showParty
-    if inRaid then
-        showParty = useSmallRaidParty or self.db.partyLayout.hideInRaid ~= true
-    else
-        showParty = not (options.useInParty and inGroup)
-    end
-    RegisterStateDriver(party, "visibility", partyEnabled and showParty and "show" or "hide")
-
-    if not raidEnabled then
-        RegisterStateDriver(raid, "visibility", "hide")
-    elseif options.visibility == "show" then
-        RegisterStateDriver(raid, "visibility", "show")
-    elseif options.visibility == "hide" then
-        RegisterStateDriver(raid, "visibility", "hide")
-    else
-        local showRaid = (inRaid and not useSmallRaidParty)
-            or (not inRaid and options.useInParty and inGroup)
-        RegisterStateDriver(raid, "visibility", showRaid and "show" or "hide")
-    end
-
-    self.pendingGroupStateDrivers = nil
     return true
 end
 
@@ -200,30 +100,10 @@ function PF:SetTestMode(enabled, silent)
         return
     end
     self.testMode = enabled
-    if self.ApplyAllActionBindings then self:ApplyAllActionBindings() end
-    self:ApplyGroupStateDrivers()
-    for _, frame in ipairs(self.unitFrames) do
-        self:ApplyFrameVisibility(frame)
-        self:UpdateUnitFrame(frame, true)
-    end
-    if self.UpdateClassResourceDisplay then
-        self:UpdateClassResourceDisplay(true)
-    end
-    if self.ApplyPartyGroupLayout then
-        self:ApplyPartyGroupLayout()
-    end
-    if self.ApplyBossFramesVisibility then
-        self:ApplyBossFramesVisibility()
-    end
-    if self.RefreshCastBarPreviews then
-        self:RefreshCastBarPreviews()
-    end
-    if self.UpdateRaidConnectors then
-        self:UpdateRaidConnectors()
-    end
-    if self.RefreshPartyRangeStates then
-        self:RefreshPartyRangeStates()
-    end
+    self.FrameBehaviors:NotifyEditModeChanged(
+        self.db and not self.db.locked, enabled, "testMode"
+    )
+    self:RefreshAllFrames()
     if not silent then
         self:Print(enabled and "test mode enabled." or "test mode disabled.")
     end
@@ -232,6 +112,36 @@ end
 local driver = CreateFrame("Frame")
 driver:RegisterEvent("ADDON_LOADED")
 driver:RegisterEvent("PLAYER_LOGIN")
+driver:RegisterEvent("PLAYER_REGEN_ENABLED")
+
+local function FinishRuntimeStartup()
+    if PF.runtimeInitialized then return true end
+    if InCombatLockdown() then
+        if not PF.pendingRuntimeStartup then
+            PF.pendingRuntimeStartup = true
+            PF.startupRestoreEditMode = PF.db and not PF.db.locked or false
+            if PF.db then PF.db.locked = true end
+            PF:Print("initialization will finish after combat.")
+        end
+        return false
+    end
+
+    PF.pendingRuntimeStartup = nil
+    PF:CreateAllFrames()
+    PF:RefreshScale()
+    if PF.db.mirrorPlayerTarget then
+        PF:MirrorPlayerTargetPosition("player")
+    end
+    PF:SuppressBlizzardFrames()
+    PF.runtimeInitialized = true
+    PF:RegisterRuntimeEvents(driver)
+
+    local restoreEditMode = PF.startupRestoreEditMode
+    PF.startupRestoreEditMode = nil
+    if restoreEditMode then PF:SetLocked(false, true) end
+    return true
+end
+
 driver:SetScript("OnEvent", function(_, event, ...)
     if event == "ADDON_LOADED" then
         local loaded = ...
@@ -242,15 +152,11 @@ driver:SetScript("OnEvent", function(_, event, ...)
             PF:ApplyAllActionBindings()
         end
     elseif event == "PLAYER_LOGIN" then
-        PF:CreateAllFrames()
-        PF:RefreshScale()
-        if PF.db.mirrorPlayerTarget then
-            PF:MirrorPlayerTargetPosition("player")
-        end
-        PF:SuppressBlizzardFrames()
-        PF:RegisterRuntimeEvents(driver)
+        FinishRuntimeStartup()
+    elseif event == "PLAYER_REGEN_ENABLED" and PF.pendingRuntimeStartup then
+        FinishRuntimeStartup()
     else
-        PF:HandleEvent(event, ...)
+        if PF.runtimeInitialized then PF:HandleEvent(event, ...) end
     end
 end)
 
@@ -279,9 +185,34 @@ function PF:RegisterRuntimeEvents(frame)
     end
 end
 
+local powerEvents = {
+    UNIT_POWER_UPDATE = true,
+    UNIT_POWER_FREQUENT = true,
+    UNIT_MAXPOWER = true,
+    UNIT_DISPLAYPOWER = true,
+    UNIT_POWER_POINT_CHARGE = true,
+}
+
+local healthEvents = {
+    UNIT_HEALTH = true,
+    UNIT_MAXHEALTH = true,
+    UNIT_HEAL_PREDICTION = true,
+    UNIT_ABSORB_AMOUNT_CHANGED = true,
+    UNIT_HEAL_ABSORB_AMOUNT_CHANGED = true,
+}
+
 function PF:HandleEvent(event, unit)
     if self.HandleClassResourceEvent then
         self:HandleClassResourceEvent(event, unit)
+    end
+    if event == "PLAYER_ENTERING_WORLD" and InCombatLockdown()
+        and self.db and not self.db.locked then
+        -- A combat reload may not deliver PLAYER_REGEN_DISABLED after this
+        -- addon registers its runtime events. Close edit mode without touching
+        -- protected frames; the normal regeneration path restores it later.
+        self.restoreEditModeAfterCombat = true
+        self.db.locked = true
+        self.pendingCombatEditExit = true
     end
     if event == "UPDATE_MACROS" then
         if self.ApplyAllActionBindings then self:ApplyAllActionBindings() end
@@ -316,6 +247,11 @@ function PF:HandleEvent(event, unit)
             if self.restoreEditModeAfterCombat then
                 self:SetLocked(true, true)
             end
+        end
+        -- Refresh reaction coloring at combat entry even on clients that do
+        -- not emit a target-token faction or threat event for neutral mobs.
+        if self.frames.target then
+            self:UpdateUnitFrame(self.frames.target, false)
         end
         return
     end
@@ -363,8 +299,12 @@ function PF:HandleEvent(event, unit)
         return
     end
 
-    if event == "PLAYER_TARGET_CHANGED" and self.RefreshRaidFrames then
-        self:RefreshRaidFrames()
+    if event == "PLAYER_TARGET_CHANGED" then
+        if self.UnitIndicatorBehavior then
+            self.UnitIndicatorBehavior:RefreshAll()
+        elseif self.RefreshRaidFrames then
+            self:RefreshRaidFrames()
+        end
     end
 
     if (event == "GROUP_ROSTER_UPDATE" or event == "PLAYER_ROLES_ASSIGNED")
@@ -389,59 +329,14 @@ function PF:HandleEvent(event, unit)
         if self.pendingBlizzardSuppression then
             self:SuppressBlizzardFrames()
         end
-        if self.pendingRaidUnitBindings and self.ApplyRaidUnitBindings then
-            self:ApplyRaidUnitBindings()
-        end
-        if self.pendingPartyUnitBindings and self.ApplyPartyUnitBindings then
-            self:ApplyPartyUnitBindings()
-        end
-        if self.pendingGroupStateDrivers and self.ApplyGroupStateDrivers then
-            self:ApplyGroupStateDrivers()
-        end
         if self.pendingActionSources and self.ApplyPendingActionSources then
             self:ApplyPendingActionSources()
         elseif self.pendingActionBindings and self.ApplyAllActionBindings then
             self:ApplyAllActionBindings()
         end
 
-        local pendingFlips = self.pendingFrameFlips
-        self.pendingFrameFlips = setmetatable({}, { __mode = "k" })
-        for frame in pairs(pendingFlips) do
-            self:ApplyFrameFlip(frame)
-        end
-
-        if self.pendingScaleRefresh then
-            self:RefreshScale()
-        end
-        local pendingScales = self.pendingFrameScales
-        self.pendingFrameScales = setmetatable({}, { __mode = "k" })
-        for frame in pairs(pendingScales) do
-            self:ApplyFrameScale(frame)
-        end
-
-        local pendingVisibility = self.pendingVisibilityFrames
-        self.pendingVisibilityFrames = setmetatable({}, { __mode = "k" })
-        for frame in pairs(pendingVisibility) do
-            self:ApplyFrameVisibility(frame)
-        end
         if self.frames.pet then
             self:ApplyFrameVisibility(self.frames.pet)
-        end
-
-        if self.pendingPartyLayout and self.ApplyPartyGroupLayout then
-            self:ApplyPartyGroupLayout()
-        end
-        if self.pendingPartyAuraLayout and self.ApplyPartyAuraLayout then
-            self:ApplyPartyAuraLayout()
-        end
-        if self.pendingRaidLayout and self.ApplyRaidGroupLayout then
-            self:ApplyRaidGroupLayout()
-        end
-        if self.pendingBossLayout and self.ApplyBossGroupLayout then
-            self:ApplyBossGroupLayout()
-        end
-        if self.pendingBossVisibility and self.ApplyBossFramesVisibility then
-            self:ApplyBossFramesVisibility()
         end
 
         self.pendingRefresh = nil
@@ -462,6 +357,12 @@ function PF:HandleEvent(event, unit)
 
     if event == "UNIT_THREAT_SITUATION_UPDATE" or event == "UNIT_THREAT_LIST_UPDATE" then
         self:RefreshTargetThreatDisplays()
+        -- Threat events are the reliable signal when an attackable neutral
+        -- target becomes actively hostile while its faction reaction remains
+        -- neutral. Refresh the target bar regardless of the event's unit token.
+        if self.frames.target then
+            self:UpdateUnitFrame(self.frames.target, false)
+        end
     elseif event == "UNIT_PET" and unit == "player" then
         self:RefreshTargetThreatDisplays()
     end
@@ -486,11 +387,30 @@ function PF:HandleEvent(event, unit)
             or event == "UNIT_TARGET"
             or event == "UNIT_PET"
         for _, frame in ipairs(self.unitFrames) do
-            if frame.unit == unit or frame.unit == secondaryUnit then
+            local matchesUnit = frame.unit == unit or frame.unit == secondaryUnit
+            if not matchesUnit and frame.unit and UnitIsUnit then
+                -- Unit events may identify a visible target by another token
+                -- (commonly nameplate1 instead of target). Refresh every frame
+                -- that represents the same underlying unit so reaction colors
+                -- change as soon as a neutral target becomes hostile.
+                local ok, sameUnit = pcall(UnitIsUnit, frame.unit, unit)
+                matchesUnit = ok and self:IsDisplaySafe(sameUnit)
+                    and sameUnit == true
+            end
+            if matchesUnit then
                 if event == "UNIT_PET" then
                     self:ApplyFrameVisibility(frame)
                 end
-                self:UpdateUnitFrame(frame, updateModel)
+                if powerEvents[event] and self.UpdateUnitFramePower then
+                    self:UpdateUnitFramePower(frame)
+                elseif event == "UNIT_AURA" then
+                    self:UpdateAuras(frame)
+                    self:RefreshNativeAuras(frame)
+                elseif healthEvents[event] and self.UpdateUnitFrameHealth then
+                    self:UpdateUnitFrameHealth(frame)
+                else
+                    self:UpdateUnitFrame(frame, updateModel)
+                end
                 if event == "PLAYER_TARGET_CHANGED" or event == "PLAYER_FOCUS_CHANGED" then
                     self:RefreshNativeAuras(frame)
                 end
@@ -517,8 +437,7 @@ function PF:RefreshAllFrames()
 end
 
 function PF:Set3DPortraitsEnabled(enabled)
-    self.db.enable3DPortraits = enabled == true
-    self:RefreshAllFrames()
+    return self.PortraitBehavior:SetEnabled(enabled)
 end
 
 function PF:RefreshPartyFrames(updateModels)

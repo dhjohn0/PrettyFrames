@@ -56,6 +56,8 @@ local function SetRangeAlpha(frame, inRange, outOfRangeAlpha)
             end
         end)
         frame.availabilityAlpha = nil
+    elseif inRange == nil then
+        SetAvailabilityAlpha(frame, 1)
     elseif PF:IsDisplaySafe(inRange) then
         SetAvailabilityAlpha(frame, inRange == false and outOfRangeAlpha or 1)
     end
@@ -139,12 +141,9 @@ local function CreatePortrait(parent, size)
     model.prettyFramesPortrait = holder
     model:SetScript("OnModelLoaded", function(widget)
         local portrait = widget.prettyFramesPortrait
-        if not portrait or not portrait.modelRequested then return end
-        if PF.db and PF.db.enable3DPortraits == false then return end
-        if portrait.modelReady then return end
-
-        portrait.modelReady = true
-        portrait.fallback:Hide()
+        if PF.PortraitBehavior then
+            PF.PortraitBehavior:OnModelLoaded(portrait)
+        end
     end)
     holder.SetDisplaySize = function(widget, newSize)
         widget:SetSize(newSize, newSize)
@@ -204,35 +203,6 @@ local function CreatePortraitGlow(portrait, size, texturePath)
     glow.texture:SetBlendMode("ADD")
     glow:Hide()
     return glow
-end
-
-local function ShowPortraitFallback(portrait)
-    portrait.modelRequested = false
-    portrait.modelReady = false
-    portrait.model:ClearModel()
-    portrait.model:Hide()
-    portrait.fallback:Show()
-end
-
-local function RequestPortraitModel(portrait, unit)
-    -- Leave the generated 2D portrait visible until WoW confirms that the 3D
-    -- model loaded. If models are unavailable, OnModelLoaded never hides it.
-    if PF.db and PF.db.enable3DPortraits == false then
-        ShowPortraitFallback(portrait)
-        return
-    end
-
-    portrait.modelRequested = false
-    portrait.modelReady = false
-    portrait.fallback:Show()
-    portrait.model:ClearModel()
-    portrait.model:Show()
-    portrait.modelRequested = true
-    portrait.model:SetUnit(unit)
-    portrait.model:SetPortraitZoom(1)
-    if portrait.model.SetCamDistanceScale then
-        portrait.model:SetCamDistanceScale(portrait.cameraDistanceScale or 0.88)
-    end
 end
 
 local function CreateIndicator(parent, size, showLevel)
@@ -409,8 +379,6 @@ end
 Widgets.CreateStatusBar = CreateStatusBar
 Widgets.CreatePortrait = CreatePortrait
 Widgets.CreatePortraitGlow = CreatePortraitGlow
-Widgets.ShowPortraitFallback = ShowPortraitFallback
-Widgets.RequestPortraitModel = RequestPortraitModel
 Widgets.CreateIndicator = CreateIndicator
 Widgets.CreateRoleIndicator = CreateRoleIndicator
 Widgets.SetPartyRole = SetPartyRole
