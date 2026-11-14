@@ -13,7 +13,9 @@ An ornate unit-frame replacement designed for **World of Warcraft: Forever** (`I
 - A 125% physical Raid baseline represented as 100% in the Raid scale control for improved readability
 - Leather-and-bronze Raid group headers with autumn leaf clusters above all five columns
 - Class/reaction-colored health and power bars
+- Per-frame health and power display controls for text format, bar color, background opacity, and bar sparks
 - Automatic one-bar artwork for units with no resource, including Forever NPCs whose 0/0 power maximum is protected
+- Configurable melee/ranged distance fading and out-of-range opacity for Boss, Party, Raid, and individual unit frames
 - Unlocked-frame right-click menus with persistent Always Show, Always Hide, and horizontal-flip controls
 - Shared Action Profiles with secure Target, Focus, Menu, spell, item, and Blizzard-macro mouse or hover-keyboard bindings
 - Drag-and-drop action setup for spellbook spells, action-bar spells/items/macros, bag items, and macros
@@ -40,6 +42,7 @@ An ornate unit-frame replacement designed for **World of Warcraft: Forever** (`I
 - Balanced, Healer, Tank, and Minimal Raid display profiles with separate dispellable-debuff controls; Tank keeps mechanic and heal-absorb warnings while removing maintenance and incoming-heal clutter
 - Consistent raid-target markers across Player, Pet, Target, Focus, Target-of-Target, Party, Raid, and world nameplate frames
 - Layered Raid presentation with distinct target edges and threat glows, clearer unavailable-state fading, roles, raid markers, leadership, transient group statuses, and important debuffs
+- Independent Party and Raid visibility controls for status text, role and leadership icons, target highlights, and raid markers
 - One group-level Raid move-handle menu for Always Show, Always Hide, and replacing Party frames with the compact Raid layout
 - Independent Party move-handle options to use portrait Party frames in raids of five or fewer and hide them in larger raid groups
 - A fixed-width, single-piece autumn frame skin that joins the large leaf-covered portrait ring, leather nameplate, status-bar borders, and corner ornament into one continuous design
@@ -79,7 +82,8 @@ Action bindings are prepared outside combat and executed by the unit frames' sec
 
 - `Core.lua`, `Database.lua`, and `Runtime.lua` initialize the addon, saved settings, and event routing.
 - `Actions.lua` owns action profiles, validation, cursor parsing, and protected attributes; `ActionsUI.lua` owns the editor.
-- `FrameSettings.lua` owns movement, scaling, visibility, locking, and context-menu behavior.
+- `FrameBehaviors.lua` and the `*Behavior.lua` modules provide reusable frame settings and displays, including movement, visibility, health/power presentation, range fading, threat, indicators, and context-menu behavior.
+- `FrameSettings.lua` coordinates saved frame settings, locking, and the shared behavior modules.
 - `FrameWidgets.lua`, `Auras.lua`, `CastBars.lua`, and `UnitFrameData.lua` provide shared frame components and data updates.
 - `OrnateUnitFrames.lua`, `PlayerFrame.lua`, `BossFrames.lua`, `PartyFrames.lua`, and `RaidFrames.lua` own the individual frame families; `RaidFrameOptions.lua` owns Party and Raid display profiles plus Raid configuration menus.
 - `FrameController.lua` constructs the frame families after login.

@@ -2,6 +2,21 @@
 
 All notable changes to PrettyFrames are documented here.
 
+## 1.0.0 - 2026-11-14
+
+### Added
+
+- Added per-frame health text modes, health color choices, background opacity, and bar-spark controls.
+- Added power text modes, power color choices, background opacity, bar-spark controls, and manual one-bar layouts where supported.
+- Added configurable melee or ranged distance checks and out-of-range opacity for Boss, Party, Raid, and individual unit frames.
+- Added Party and Raid controls for status text, role and leadership icons, target highlights, and raid markers.
+
+### Improved
+
+- Made yellow portrait threat warnings appear earlier so rising threat is easier to notice before aggro.
+- Improved action-binding conflict reporting and compatibility with other click-casting providers.
+- Made frame option behavior more consistent across individual, Boss, Party, Raid, and nameplate frames.
+
 ## 0.31.0 - 2026-11-12
 
 ### Added
