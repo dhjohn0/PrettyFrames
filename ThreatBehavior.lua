@@ -119,8 +119,8 @@ function ThreatBehavior:UpdateUnitFrame(frame, exists, preview)
     local statusIsSecret = issecretvalue and issecretvalue(status)
     if not statusIsSecret and status == nil then return end
 
+    if not statusIsSecret then SetTargetThreatColor(frame, status) end
     if setting.showThreatGlow ~= false and not statusIsSecret then
-        SetTargetThreatColor(frame, status)
         if status == 0 and PF:IsDisplaySafe(scaledPercentage) then
             local progress = math.max(0, math.min(1, scaledPercentage / 50))
             frame.threatGlow.texture:SetAlpha(0.08 + progress * 0.38)
@@ -145,7 +145,6 @@ function ThreatBehavior:UpdateUnitFrame(frame, exists, preview)
         -- FontString, but addon Lua must not compare or perform math on them.
         frame.threatText:SetFormattedText("%.0f%%", percentage)
     end
-    if not statusIsSecret then SetTargetThreatColor(frame, status) end
     frame.threatText:Show()
 end
 

@@ -19,6 +19,7 @@ An ornate unit-frame replacement designed for **World of Warcraft: Forever** (`I
 - Unlocked-frame right-click menus with persistent Always Show, Always Hide, and horizontal-flip controls
 - Shared Action Profiles with secure Target, Focus, Menu, spell, item, and Blizzard-macro mouse or hover-keyboard bindings
 - Drag-and-drop action setup for spellbook spells, action-bar spells/items/macros, bag items, and macros
+- Drag-to-reorder action bindings with spell rank and subtext labels for distinguishing similarly named spells
 - All eight Shift/Ctrl/Alt combinations on Left, Right, Middle, Mouse 4–31, and captured keyboard keys
 - Persistent 60–160% scale sliders in every frame, Party-group, and Raid-group right-click menu
 - Independent Pet visibility controls; Always Hide elements remain visible at half opacity while frames are unlocked

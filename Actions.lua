@@ -395,11 +395,31 @@ function PF:ResolveMacro(custom, updateIdentity)
     return match and unpack(match)
 end
 
+function PF:GetSpellSubtext(spellID)
+    if type(spellID) ~= "number" then return nil end
+    local subtext
+    if C_Spell and C_Spell.GetSpellSubtext then
+        subtext = C_Spell.GetSpellSubtext(spellID)
+    end
+    if (type(subtext) ~= "string" or subtext == "") and GetSpellSubtext then
+        subtext = GetSpellSubtext(spellID)
+    end
+    if (type(subtext) ~= "string" or subtext == "") and GetSpellInfo then
+        local _, legacySubtext = GetSpellInfo(spellID)
+        subtext = legacySubtext
+    end
+    return type(subtext) == "string" and subtext ~= "" and subtext or nil
+end
+
 function PF:GetCustomActionDisplay(custom)
     if type(custom) ~= "table" then return "Drop a spell, item, or macro", 134400 end
     if custom.kind == "spell" then
         local info = C_Spell and C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(custom.id)
         local name = info and info.name or (GetSpellInfo and GetSpellInfo(custom.id)) or custom.name
+        local subtext = self:GetSpellSubtext(custom.id)
+        if name and subtext and not name:find(subtext, 1, true) then
+            name = name .. " (" .. subtext .. ")"
+        end
         local icon = C_Spell and C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(custom.id)
             or (GetSpellTexture and GetSpellTexture(custom.id)) or custom.icon
         return name or ("Spell " .. custom.id), icon or 134400

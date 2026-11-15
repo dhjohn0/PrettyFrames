@@ -178,7 +178,22 @@ local function ShowCustomTooltip(slot, custom)
     if not custom then return end
     GameTooltip:SetOwner(slot, "ANCHOR_RIGHT")
     if custom.kind == "spell" then
-        if GameTooltip.SetSpellByID then GameTooltip:SetSpellByID(custom.id) end
+        if GameTooltip.SetSpellByID then
+            -- Request the client's normal spell subtext, then backfill the
+            -- tooltip title for Forever builds that ignore that argument.
+            GameTooltip:SetSpellByID(custom.id, false, true)
+            local subtext = PF:GetSpellSubtext(custom.id)
+            local tooltipName = GameTooltip.GetName and GameTooltip:GetName()
+            local title = tooltipName and _G[tooltipName .. "TextLeft1"]
+            local titleRight = tooltipName and _G[tooltipName .. "TextRight1"]
+            local titleText = title and title:GetText()
+            local titleRightText = titleRight and titleRight:GetText()
+            local hasSubtext = subtext and ((titleText and titleText:find(subtext, 1, true))
+                or (titleRightText and titleRightText:find(subtext, 1, true)))
+            if subtext and titleText and not hasSubtext then
+                title:SetText(titleText .. " (" .. subtext .. ")")
+            end
+        end
     elseif custom.kind == "item" then
         if GameTooltip.SetItemByID then
             GameTooltip:SetItemByID(custom.id)
@@ -281,10 +296,22 @@ local function CreateKeyCaptureButton(row, window, profileName, profile, index, 
     local capturing, deadline
 
     local function StopCapture()
-        if not capturing then return end
+        local wasCapturing = capturing
+        -- Forever can leave keyboard propagation disabled after a capture.
+        -- Restore it on the next frame so the key just captured stays consumed.
+        button:EnableKeyboard(false)
+        button:SetScript("OnKeyDown", nil)
+        if wasCapturing and button.SetPropagateKeyboardInput and C_Timer and C_Timer.After then
+            C_Timer.After(0, function()
+                if not InCombatLockdown() then button:SetPropagateKeyboardInput(true) end
+            end)
+        end
+        if window.activeKeyCapture == StopCapture then
+            window.activeKeyCapture = nil
+        end
+        if not wasCapturing then return end
         capturing = nil
         deadline = nil
-        button:EnableKeyboard(false)
         button:SetScript("OnUpdate", nil)
         SetButtonText(button, KeyboardBindingText(binding))
     end
@@ -298,16 +325,13 @@ local function CreateKeyCaptureButton(row, window, profileName, profile, index, 
         end
     end
 
-    button:SetScript("OnClick", function(self)
-        if InCombatLockdown() then return end
-        capturing = true
-        deadline = GetTime() + 5
-        self:EnableKeyboard(true)
-        self:SetScript("OnUpdate", UpdateCapture)
-        UpdateCapture(self)
-    end)
-    button:SetScript("OnKeyDown", function(self, key)
-        if not capturing or type(key) ~= "string" then return end
+    local function CaptureKey(self, key)
+        if not capturing or type(key) ~= "string" then
+            if self.SetPropagateKeyboardInput and not InCombatLockdown() then
+                self:SetPropagateKeyboardInput(true)
+            end
+            return
+        end
         if self.SetPropagateKeyboardInput then self:SetPropagateKeyboardInput(false) end
         key = key:upper()
         if modifierKeyNames[key] then return end
@@ -325,9 +349,59 @@ local function CreateKeyCaptureButton(row, window, profileName, profile, index, 
         binding.modifier = modifier
         binding.key = key
         MarkProfileChanged(profileName)
+    end
+
+    -- Setting OnKeyDown enables keyboard ownership on this client, so keep
+    -- both the handler and keyboard input absent until capture actually starts.
+    if button.SetPropagateKeyboardInput and not InCombatLockdown() then
+        button:SetPropagateKeyboardInput(true)
+    end
+    button:EnableKeyboard(false)
+    button:SetScript("OnClick", function(self)
+        if InCombatLockdown() then return end
+        if window.activeKeyCapture and window.activeKeyCapture ~= StopCapture then
+            window.activeKeyCapture()
+        end
+        capturing = true
+        deadline = GetTime() + 5
+        window.activeKeyCapture = StopCapture
+        self:SetScript("OnKeyDown", CaptureKey)
+        self:EnableKeyboard(true)
+        if self.SetPropagateKeyboardInput then self:SetPropagateKeyboardInput(false) end
+        self:SetScript("OnUpdate", UpdateCapture)
+        UpdateCapture(self)
     end)
     row:HookScript("OnHide", StopCapture)
     return button
+end
+
+local function GetActionDropIndex(window)
+    local rows = window.actionRows or {}
+    if #rows == 0 then return 1 end
+    local _, cursorY = GetCursorPosition()
+    local scale = window.content:GetEffectiveScale()
+    cursorY = cursorY / (scale > 0 and scale or 1)
+    for index, actionRow in ipairs(rows) do
+        local top, bottom = actionRow:GetTop(), actionRow:GetBottom()
+        if top and bottom and cursorY > (top + bottom) / 2 then
+            return index
+        end
+    end
+    return #rows + 1
+end
+
+local function ShowActionDropIndicator(window, dropIndex)
+    local rows = window.actionRows or {}
+    local indicator = window.actionDropIndicator
+    indicator:ClearAllPoints()
+    if rows[dropIndex] then
+        indicator:SetPoint("CENTER", rows[dropIndex], "TOP", 0, 0)
+    elseif rows[#rows] then
+        indicator:SetPoint("CENTER", rows[#rows], "BOTTOM", 0, 0)
+    else
+        indicator:SetPoint("TOP", window.content, "TOP", 0, 0)
+    end
+    indicator:Show()
 end
 
 local function CreateRow(window, profileName, profile, index, binding, y)
@@ -339,6 +413,7 @@ local function CreateRow(window, profileName, profile, index, binding, y)
     row:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
     row:SetBackdropColor(0.08, 0.05, 0.025, 0.92)
     row:SetBackdropBorderColor(0.34, 0.2, 0.08, 1)
+    window.actionRows[index] = row
 
     local modifierValue = FindValue(PF.ACTION_MODIFIERS, binding.modifier)
     local modifier = CreateDropdown(
@@ -346,7 +421,7 @@ local function CreateRow(window, profileName, profile, index, binding, y)
         function() return binding.modifier end,
         function(value) SelectBindingValue(window, profileName, profile, index, "modifier", value) end
     )
-    modifier:SetPoint("TOPLEFT", 10, -8)
+    modifier:SetPoint("TOPLEFT", 34, -8)
 
     local inputID = binding.input == "keyboard" and "keyboard" or "mouse"
     local inputValue = FindValue(PF.ACTION_INPUT_TYPES, inputID)
@@ -390,6 +465,77 @@ local function CreateRow(window, profileName, profile, index, binding, y)
         GameTooltip:Show()
     end)
     trash:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+    -- The grip is a generated, hand-painted asset rather than a font glyph;
+    -- Forever's UI font does not contain the usual drag-handle character.
+    local handle = CreateFrame("Button", nil, row)
+    handle:SetSize(22, 25)
+    handle:SetPoint("TOPLEFT", 5, -8)
+    handle:RegisterForDrag("LeftButton")
+    local grip = handle:CreateTexture(nil, "ARTWORK")
+    grip:SetTexture("Interface\\AddOns\\PrettyFrames\\Themes\\Shared\\Assets\\ActionDragGrip")
+    grip:SetSize(20, 20)
+    grip:SetPoint("CENTER")
+    local function SetGripHighlight(highlighted)
+        if highlighted then
+            grip:SetVertexColor(1, 1, 1, 1)
+        else
+            grip:SetVertexColor(0.68, 0.62, 0.52, 1)
+        end
+    end
+    SetGripHighlight(false)
+    local dragging
+
+    local function StopDrag(reorder)
+        if not dragging then return end
+        dragging = nil
+        handle:SetScript("OnUpdate", nil)
+        SetGripHighlight(handle:IsMouseOver())
+        row:SetAlpha(1)
+        window.actionDropIndicator:Hide()
+        if not reorder then return end
+
+        local sourceIndex
+        for bindingIndex, candidate in ipairs(profile.bindings) do
+            if candidate == binding then
+                sourceIndex = bindingIndex
+                break
+            end
+        end
+        if not sourceIndex then return end
+        local destinationIndex = GetActionDropIndex(window)
+        if destinationIndex > sourceIndex then destinationIndex = destinationIndex - 1 end
+        destinationIndex = math.max(1, math.min(destinationIndex, #profile.bindings))
+        if destinationIndex == sourceIndex then return end
+
+        table.remove(profile.bindings, sourceIndex)
+        table.insert(profile.bindings, destinationIndex, binding)
+        MarkProfileChanged(profileName)
+    end
+
+    handle:SetScript("OnDragStart", function(self)
+        if InCombatLockdown() then return end
+        if window.activeKeyCapture then window.activeKeyCapture() end
+        dragging = true
+        SetGripHighlight(true)
+        row:SetAlpha(0.55)
+        self:SetScript("OnUpdate", function()
+            ShowActionDropIndicator(window, GetActionDropIndex(window))
+        end)
+        ShowActionDropIndicator(window, GetActionDropIndex(window))
+    end)
+    handle:SetScript("OnDragStop", function() StopDrag(true) end)
+    handle:SetScript("OnEnter", function(self)
+        SetGripHighlight(true)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText("Drag to reorder")
+        GameTooltip:Show()
+    end)
+    handle:SetScript("OnLeave", function()
+        if not dragging then SetGripHighlight(false) end
+        GameTooltip:Hide()
+    end)
+    row:HookScript("OnHide", function() StopDrag(false) end)
 
     if custom then CreateActionSlot(row, profileName, binding) end
     return height
@@ -511,6 +657,10 @@ function PF:CreateActionsWindow()
     window.content = CreateFrame("Frame", nil, window.scroll)
     window.content:SetSize(ROW_WIDTH, 1)
     window.scroll:SetScrollChild(window.content)
+    window.actionDropIndicator = window.content:CreateTexture(nil, "OVERLAY")
+    window.actionDropIndicator:SetColorTexture(1, 0.72, 0.18, 1)
+    window.actionDropIndicator:SetSize(ROW_WIDTH - 4, 3)
+    window.actionDropIndicator:Hide()
 
     window.message = window:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     window.message:SetPoint("BOTTOMLEFT", 24, 28)
@@ -559,6 +709,8 @@ function PF:RefreshActionsWindow()
     end
 
     for _, child in ipairs({ window.content:GetChildren() }) do child:Hide(); child:SetParent(nil) end
+    window.actionRows = {}
+    window.actionDropIndicator:Hide()
     local y = 0
     for index, binding in ipairs(profile.bindings) do
         y = y + CreateRow(window, window.profileName, profile, index, binding, y) + 6
@@ -579,7 +731,7 @@ function PF:RefreshActionsWindow()
     end)
     local plusHint = plus:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     plusHint:SetPoint("LEFT", plus, "RIGHT", 8, 0)
-    plusHint:SetText("Add binding")
+    plusHint:SetText("Add binding • Drag the grip to reorder")
     window.content:SetHeight(math.max(1, y + 35))
 end
 

@@ -2,6 +2,18 @@
 
 All notable changes to PrettyFrames are documented here.
 
+## 1.0.1 - 2026-11-15
+
+### Added
+
+- Added drag handles for reordering bindings in the Action Profiles editor.
+- Added spell rank and subtext labels to action slots and spell tooltips, making similarly named spell variants easier to distinguish.
+
+### Fixed
+
+- Fixed keyboard binding capture sometimes continuing to consume keyboard input after a key was selected or capture ended.
+- Fixed low-threat portrait glows being reset to a fixed opacity instead of brightening as threat rises.
+
 ## 1.0.0 - 2026-11-14
 
 ### Added
