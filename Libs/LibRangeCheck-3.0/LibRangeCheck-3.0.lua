@@ -4575,7 +4575,10 @@ function lib:processItemRequests(itemRequests)
         itemRequestTimeoutAt[item] = GetTime() + ItemRequestTimeout
         pendingItemRequest[item] = true
         if not self.frame:IsEventRegistered("GET_ITEM_INFO_RECEIVED") then
-          self.frame:RegisterEvent("GET_ITEM_INFO_RECEIVED")
+          if not C_EventUtils or not C_EventUtils.IsEventValid
+              or C_EventUtils.IsEventValid("GET_ITEM_INFO_RECEIVED") then
+            pcall(self.frame.RegisterEvent, self.frame, "GET_ITEM_INFO_RECEIVED")
+          end
         end
         return true
       elseif GetTime() >= itemRequestTimeoutAt[item] then
@@ -4987,25 +4990,34 @@ function lib:activate()
     local frame = CreateFrame("Frame")
     self.frame = frame
 
-    frame:RegisterEvent("CHARACTER_POINTS_CHANGED")
-    frame:RegisterEvent("SPELLS_CHANGED")
-
-    if C_EventUtils and C_EventUtils.IsEventValid("LEARNED_SPELL_IN_TAB") then
-      frame:RegisterEvent("LEARNED_SPELL_IN_TAB")
+    local function registerEvent(event, unit)
+      if C_EventUtils and C_EventUtils.IsEventValid and not C_EventUtils.IsEventValid(event) then
+        return false
+      end
+      return pcall(function()
+        if unit then
+          frame:RegisterUnitEvent(event, unit)
+        else
+          frame:RegisterEvent(event)
+        end
+      end)
     end
 
-    if C_EventUtils and C_EventUtils.IsEventValid("PLAYER_TALENT_UPDATE") then
-      frame:RegisterEvent("PLAYER_TALENT_UPDATE")
-    end
+    registerEvent("CHARACTER_POINTS_CHANGED")
+    registerEvent("SPELLS_CHANGED")
+
+    registerEvent("LEARNED_SPELL_IN_TAB")
+
+    registerEvent("PLAYER_TALENT_UPDATE")
 
     if (isEra or isTBC or isWrath or isCata or isForever) then
-      frame:RegisterEvent("CVAR_UPDATE")
+      registerEvent("CVAR_UPDATE")
     end
 
     local _, playerClass = UnitClass("player")
     if playerClass == "MAGE" or playerClass == "SHAMAN" then
       -- Mage and Shaman gladiator gloves modify spell ranges
-      frame:RegisterUnitEvent("UNIT_INVENTORY_CHANGED", "player")
+      registerEvent("UNIT_INVENTORY_CHANGED", "player")
     end
   end
 

@@ -5,7 +5,15 @@ function PF:SetLocked(locked, silent)
         self:Print("frame locking cannot change during combat.")
         return false
     end
-    self.db.locked = locked
+    if locked then
+        if self.EndGroupLayoutEditing then self:EndGroupLayoutEditing() end
+    end
+    self:SetThemeOption("locked", locked)
+    if not locked then
+        if self.BeginGroupLayoutEditing then self:BeginGroupLayoutEditing() end
+    elseif self.UpdateGroupLayoutSelector then
+        self:UpdateGroupLayoutSelector()
+    end
     if locked and self.actionsWindow then self.actionsWindow:Hide() end
     self.FrameBehaviors:NotifyEditModeChanged(not locked, self.testMode, "lock")
     if self.RefreshAllFrames then
@@ -21,7 +29,8 @@ function PF:SuppressBlizzardFrames()
     if self.db.replaceUnitFrames == false
         and self.db.replaceBossFrames == false
         and self.db.replacePartyFrames == false
-        and self.db.replaceRaidFrames == false then
+        and self.db.replaceRaidFrames == false
+        and self.db.replaceExperienceBar ~= true then
         return
     end
     if InCombatLockdown() then
@@ -54,6 +63,15 @@ function PF:SuppressBlizzardFrames()
         raid = {
             enabled = function() return PF.db and PF.db.replaceRaidFrames ~= false end,
             names = { "CompactRaidFrameManager", "CompactRaidFrameContainer" },
+        },
+        experience = {
+            enabled = function() return PF.db and PF.db.replaceExperienceBar == true end,
+            names = {
+                "MainStatusTrackingBarContainer", "SecondaryStatusTrackingBarContainer",
+                "StatusTrackingBarManager",
+                "MainMenuExpBar", "ReputationWatchBar", "HonorWatchBar",
+                "ArtifactWatchBar", "MainMenuBarMaxLevelBar",
+            },
         },
     }
 
@@ -110,9 +128,9 @@ function PF:SetTestMode(enabled, silent)
 end
 
 local driver = CreateFrame("Frame")
-driver:RegisterEvent("ADDON_LOADED")
-driver:RegisterEvent("PLAYER_LOGIN")
-driver:RegisterEvent("PLAYER_REGEN_ENABLED")
+PF:RegisterEventSafe(driver, "ADDON_LOADED")
+PF:RegisterEventSafe(driver, "PLAYER_LOGIN")
+PF:RegisterEventSafe(driver, "PLAYER_REGEN_ENABLED")
 
 local function FinishRuntimeStartup()
     if PF.runtimeInitialized then return true end
@@ -120,7 +138,7 @@ local function FinishRuntimeStartup()
         if not PF.pendingRuntimeStartup then
             PF.pendingRuntimeStartup = true
             PF.startupRestoreEditMode = PF.db and not PF.db.locked or false
-            if PF.db then PF.db.locked = true end
+            if PF.db then PF:SetThemeOption("locked", true) end
             PF:Print("initialization will finish after combat.")
         end
         return false
@@ -136,6 +154,12 @@ local function FinishRuntimeStartup()
     PF.runtimeInitialized = true
     PF:RegisterRuntimeEvents(driver)
 
+    if PF.db and not PF.db.locked and PF.BeginGroupLayoutEditing then
+        PF:BeginGroupLayoutEditing()
+    elseif PF.UpdateGroupLayoutSelector then
+        PF:UpdateGroupLayoutSelector()
+    end
+
     local restoreEditMode = PF.startupRestoreEditMode
     PF.startupRestoreEditMode = nil
     if restoreEditMode then PF:SetLocked(false, true) end
@@ -147,6 +171,7 @@ driver:SetScript("OnEvent", function(_, event, ...)
         local loaded = ...
         if loaded == addonName then
             PF:InitializeDatabase()
+            if PF.InitializeGroupLayouts then PF:InitializeGroupLayouts() end
         elseif PF.db and (loaded == "Clique" or loaded == "Blizzard_ClickBindingUI")
             and PF.ApplyAllActionBindings then
             PF:ApplyAllActionBindings()
@@ -180,9 +205,7 @@ function PF:RegisterRuntimeEvents(frame)
         "ITEM_COUNT_CHANGED", "BAG_UPDATE_DELAYED",
         "UNIT_INVENTORY_CHANGED", "PLAYER_EQUIPMENT_CHANGED",
     }
-    for _, event in ipairs(events) do
-        frame:RegisterEvent(event)
-    end
+    for _, event in ipairs(events) do self:RegisterEventSafe(frame, event) end
 end
 
 local powerEvents = {
@@ -211,7 +234,10 @@ function PF:HandleEvent(event, unit)
         -- addon registers its runtime events. Close edit mode without touching
         -- protected frames; the normal regeneration path restores it later.
         self.restoreEditModeAfterCombat = true
-        self.db.locked = true
+        self:SetThemeOption("locked", true)
+        if self.SaveActiveGroupLayout then self:SaveActiveGroupLayout() end
+        self.editingGroupLayoutMode = nil
+        if self.UpdateGroupLayoutSelector then self:UpdateGroupLayoutSelector() end
         self.pendingCombatEditExit = true
     end
     if event == "UPDATE_MACROS" then
@@ -238,7 +264,10 @@ function PF:HandleEvent(event, unit)
             -- its prepared bindings. Keep insecure edit callbacks closed even
             -- on clients where this event arrives after lockdown begins.
             self.testMode = false
-            if self.db then self.db.locked = true end
+            if self.db then self:SetThemeOption("locked", true) end
+            if self.SaveActiveGroupLayout then self:SaveActiveGroupLayout() end
+            self.editingGroupLayoutMode = nil
+            if self.UpdateGroupLayoutSelector then self:UpdateGroupLayoutSelector() end
             self.pendingCombatEditExit = true
         else
             if self.restoreTestModeAfterCombat then
@@ -277,6 +306,9 @@ function PF:HandleEvent(event, unit)
     end
 
     if event == "GROUP_ROSTER_UPDATE" or event == "PLAYER_ENTERING_WORLD" then
+        if self.UpdateGroupLayoutForGroupState then
+            self:UpdateGroupLayoutForGroupState()
+        end
         self:SuppressBlizzardFrames()
         if event == "PLAYER_ENTERING_WORLD" and self.UpdatePlayerRestingIndicator then
             self:UpdatePlayerRestingIndicator()
@@ -326,6 +358,11 @@ function PF:HandleEvent(event, unit)
 
     if event == "PLAYER_REGEN_ENABLED" then
         self.pendingCombatEditExit = nil
+        if self.pendingGroupLayoutMode and self.ApplyGroupLayoutMode then
+            self:ApplyGroupLayoutMode(self.pendingGroupLayoutMode, true)
+        elseif self.UpdateGroupLayoutForGroupState then
+            self:UpdateGroupLayoutForGroupState()
+        end
         if self.pendingBlizzardSuppression then
             self:SuppressBlizzardFrames()
         end

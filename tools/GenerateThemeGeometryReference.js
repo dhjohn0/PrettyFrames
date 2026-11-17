@@ -416,17 +416,23 @@ function geometryRows(theme) {
   for (const [name, barSize, extra, minHeight, glowExtra, glowMinHeight, ornamentPoint] of castConsumers) {
     const ornamentWidth = barSize[0] + extra;
     const ornamentHeight = Math.max(minHeight, ornamentWidth / cast.ornamentAspect);
+    const endCapSize = cast.endCapBarScale
+      ? barSize[1] * cast.endCapBarScale
+      : ornamentHeight * (cast.endCapScale || 1);
+    const endCapOffsetX = endCapSize * (
+      cast.castEndCapOffsetX ?? cast.endCapOffsetX ?? 0
+    );
+    const endCapOffsetY = endCapSize * (
+      cast.castEndCapOffsetY ?? cast.endCapOffsetY ?? 0
+    );
     const barParent = { w: barSize[0], h: barSize[1] };
     const ornamentRect = sizedRect(ornamentPoint, [ornamentWidth, ornamentHeight], barParent);
-    const barInsideOrnament = { x: -ornamentRect.x, y: -ornamentRect.y, w: barSize[0], h: barSize[1] };
-    const castImage = theme.images.castBarFrame;
-    const castMapped = sourceRect(barInsideOrnament, { w: ornamentWidth, h: ornamentHeight }, [0, 1, 0, 1], castImage);
-    const castCoverage = alphaCoverage(castImage, castMapped);
     rows.push({ composition: name, region: "Live bar", parentName: "owning frame", rect: { x: 0, y: 0, w: barSize[0], h: barSize[1] }, configPath: "consumer castBarSize" });
     rows.push({ composition: name, region: "Spell icon", parentName: "live cast bar", rect: sizedRect(cast.iconPoint, [barSize[1] + cast.iconExtraSize, barSize[1] + cast.iconExtraSize], barParent), configPath: "castBar.iconPoint + iconExtraSize" });
     span(name, "Cast text", "spell icon right edge to live bar right", `left gap ${fmt(cast.textLeft)}, right inset ${fmt(-cast.textRight)}, vertically centered; font size ${Math.max(9, barSize[1] - 3)}`, "castBar.textLeft/textRight + runtime font rule");
     rows.push({ composition: name, region: "Ornament", parentName: "live cast bar", rect: ornamentRect, configPath: "castBar ornament point/extra/aspect/minimum", note: "sibling overlay; dimensions derived at runtime" });
-    rows.push({ composition: name, region: "Bar opening in ornament art", parentName: "ornament-local", rect: barInsideOrnament, mapped: castMapped, coverage: castCoverage, configPath: "derived from live bar and ornament geometry", note: "lower alpha means less ornament painted across the live fill" });
+    rows.push({ composition: name, region: "Left end cap", parentName: "ornament-local", rect: { x: -endCapOffsetX, y: (ornamentHeight - endCapSize) / 2 - endCapOffsetY, w: endCapSize, h: endCapSize }, configPath: "castBarEndCap + cap scale/offset", note: "single square source asset" });
+    rows.push({ composition: name, region: "Right end cap", parentName: "ornament-local", rect: { x: ornamentWidth - endCapSize + endCapOffsetX, y: (ornamentHeight - endCapSize) / 2 - endCapOffsetY, w: endCapSize, h: endCapSize }, configPath: "castBarEndCap + cap scale/offset", note: "horizontal mirror of left cap" });
     const glowWidth = barSize[0] + glowExtra;
     const glowHeight = Math.max(glowMinHeight, glowWidth / cast.ornamentAspect);
     rows.push({ composition: name, region: "Interrupt glow", parentName: "live cast bar", rect: sizedRect(cast.interruptGlowPoint, [glowWidth, glowHeight], barParent), configPath: "interruptGlowPoint/crop/alpha + consumer glow extra/minimum", note: `UV crop ${fmt(cast.interruptGlowCrop)}, alpha ${fmt(cast.interruptGlowAlpha)}` });
@@ -493,7 +499,7 @@ lines.push("## Independent-theme blank worksheet", "", "Copy this section into t
   ["Party", "", "partyFrame", "portrait / health / power / name / level / class / role", "Party root", "", "", "", "mirrored + connector", ""],
   ["Raid", "", "raidFrame", "health / name / role / marker / status", "Raid root", "", "", "", "three-slice + 40 frames", ""],
   ["Nameplate", "", "nameplateFrame", "health / name / level / marker / cast", "Blizzard health container", "", "", "opaque health backing", "native nameplate paths", ""],
-  ["Cast bars", "", "castBarFrame + interrupt glow", "bar / icon / text / ornament / glow", "live cast bar", "", "", "transparent interior", "all consumers + preview", ""]
+  ["Cast bars", "", "castBarEndCap + interrupt glow", "bar / icon / text / mirrored end caps / glow", "live cast bar", "", "", "no center ornament", "all consumers + preview", ""]
 ]));
 
 fs.writeFileSync(outputPath, lines.join("\n"), "utf8");

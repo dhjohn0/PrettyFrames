@@ -604,7 +604,10 @@ end
 local function GetAuraDataByIndexSafe(unit, index, filter)
     if not C_UnitAuras or not C_UnitAuras.GetAuraDataByIndex then return nil end
     local ok, aura = pcall(C_UnitAuras.GetAuraDataByIndex, unit, index, filter)
-    return ok and aura or nil
+    if not ok or not aura then return nil end
+    if issecrettable and issecrettable(aura) then return nil end
+    if canaccesstable and not canaccesstable(aura) then return nil end
+    return aura
 end
 
 local function IsPlayerOwnedDebuff(aura)

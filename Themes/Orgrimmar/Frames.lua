@@ -25,7 +25,7 @@ PF:ExtendTheme("orgrimmar", {
             raid = { raidFrame = "RaidFrame.tga" },
             nameplate = { nameplateFrame = "NameplateFrame.tga" },
             castBar = {
-                castBarFrame = "CastBarFrame.tga",
+                castBarEndCap = "CastBarEndCap.tga",
                 castBarInterruptGlow = "CastBarInterruptGlow.tga",
             },
         },

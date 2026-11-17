@@ -2,6 +2,10 @@
 
 The source PNG files in this directory were generated with the built-in image-generation tool. The TGA files are resized, game-ready derivatives consumed by the addon.
 
+## CastBarEndCap
+
+The canonical 128 x 128 asset is a lossless crop of the original Verdant cast-bar ornament's left cap. Only that cap is stored; runtime horizontally mirrors it for the right end. No center ornament or rail texture is retained.
+
 ## CastBarInterruptibleGlow-v1
 
 Transparent cast-bar highlight with exactly two parallel green-gold luminous

@@ -85,6 +85,18 @@ local portraits3DCheck = CreateCheckButton(
     end
 )
 
+local groupLayoutsCheck = CreateCheckButton(
+    "Use different layouts for Solo, Party, and Raid",
+    "Automatically switches movable frame positions by group mode. Unlock frames to preview, edit, or reset each layout.",
+    -252,
+    function(button)
+        if panel.refreshing or not PF.db then return end
+        if not PF:SetGroupLayoutsEnabled(button:GetChecked()) then
+            button:SetChecked(PF.db.groupLayoutsEnabled == true)
+        end
+    end
+)
+
 StaticPopupDialogs.PRETTYFRAMES_CHANGE_THEME = {
     text = "Switch PrettyFrames to the %s theme?\n\nThe interface will reload to rebuild every frame with the new theme.",
     button1 = ACCEPT,
@@ -101,7 +113,7 @@ StaticPopupDialogs.PRETTYFRAMES_CHANGE_THEME = {
 }
 
 local themeLabel = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-themeLabel:SetPoint("TOPLEFT", appearanceHeader, "BOTTOMLEFT", 4, -252)
+themeLabel:SetPoint("TOPLEFT", appearanceHeader, "BOTTOMLEFT", 4, -322)
 themeLabel:SetText("Theme")
 
 local themeDropdown = CreateFrame("Frame", "PrettyFramesThemeDropdown", panel, "UIDropDownMenuTemplate")
@@ -124,7 +136,7 @@ UIDropDownMenu_Initialize(themeDropdown, function()
 end)
 
 local scaleLabel = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-scaleLabel:SetPoint("TOPLEFT", appearanceHeader, "BOTTOMLEFT", 4, -312)
+scaleLabel:SetPoint("TOPLEFT", appearanceHeader, "BOTTOMLEFT", 4, -382)
 scaleLabel:SetText("Global frame scale")
 
 local scaleValue = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
@@ -146,7 +158,7 @@ scaleSlider:SetScript("OnValueChanged", function(_, value)
     value = math.floor(value * 20 + 0.5) / 20
     scaleValue:SetFormattedText("%d%%", value * 100)
     if panel.refreshing or not PF.db then return end
-    PF.db.scale = value
+    PF:SetThemeOption("scale", value)
     PF:RefreshScale()
 end)
 
@@ -166,14 +178,14 @@ StaticPopupDialogs.PRETTYFRAMES_RESET_SETTINGS = {
 
 local resetButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
 resetButton:SetSize(150, 26)
-resetButton:SetPoint("TOPLEFT", scaleSlider, "BOTTOMLEFT", -5, -42)
+resetButton:SetPoint("TOPLEFT", scaleSlider, "BOTTOMLEFT", -5, -26)
 resetButton:SetText("Reset All Settings")
 resetButton:SetScript("OnClick", function()
     StaticPopup_Show("PRETTYFRAMES_RESET_SETTINGS")
 end)
 
 local commandHelp = panel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
-commandHelp:SetPoint("TOPLEFT", resetButton, "BOTTOMLEFT", 0, -24)
+commandHelp:SetPoint("TOPLEFT", resetButton, "BOTTOMLEFT", 0, -16)
 commandHelp:SetWidth(620)
 commandHelp:SetJustifyH("LEFT")
 commandHelp:SetText("You can also open this panel with /pf or /pf options. Existing slash commands remain available.")
@@ -185,6 +197,7 @@ function panel:Refresh()
     previewCheck:SetChecked(PF.testMode or false)
     mirrorCheck:SetChecked(PF.db.mirrorPlayerTarget)
     portraits3DCheck:SetChecked(PF.db.enable3DPortraits)
+    groupLayoutsCheck:SetChecked(PF.db.groupLayoutsEnabled == true)
     local theme = PF:GetTheme(PF.db.theme)
     UIDropDownMenu_SetText(themeDropdown, theme and theme.name or PF.db.theme)
     scaleSlider:SetValue(PF.db.scale)
@@ -246,6 +259,11 @@ local featureRows = {
         label = "Replace Blizzard Nameplates",
         description = "Use the compact PrettyFrames artwork for world nameplates.",
     },
+    {
+        key = "replaceExperienceBar",
+        label = "Replace Blizzard Experience Bar",
+        description = "Use a PrettyFrames progress stack for Player, Pet, and watched Reputation. Right-click the bar to configure it.",
+    },
 }
 
 local featuresReloadNotice = featuresPanel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
@@ -259,7 +277,7 @@ for index, row in ipairs(featureRows) do
     check.Text:SetText(row.label)
     check:SetScript("OnClick", function(button)
         if featuresPanel.refreshing or not PF.db then return end
-        PF.db[featureKey] = button:GetChecked()
+        PF:SetThemeOption(featureKey, button:GetChecked())
         featuresPanel.reloadRequired = true
         featuresReloadNotice:Show()
     end)
@@ -273,7 +291,7 @@ for index, row in ipairs(featureRows) do
     featureChecks[featureKey] = check
 end
 
-featuresReloadNotice:SetPoint("TOPLEFT", featuresHeader, "BOTTOMLEFT", 0, -328)
+featuresReloadNotice:SetPoint("TOPLEFT", featuresHeader, "BOTTOMLEFT", 0, -390)
 
 local featuresReloadButton = CreateFrame("Button", nil, featuresPanel, "UIPanelButtonTemplate")
 featuresReloadButton:SetSize(130, 26)
@@ -833,7 +851,7 @@ SlashCmdList.PRETTYFRAMES = function(message)
             PF:Print(("scale must be between %.1f and %.1f."):format(PF.MIN_SCALE, PF.MAX_SCALE))
             return
         end
-        PF.db.scale = scale
+        PF:SetThemeOption("scale", scale)
         PF:RefreshScale()
         PF:Print("scale set to " .. scale .. ".")
     elseif command == "test" then
@@ -871,10 +889,10 @@ SlashCmdList.PRETTYFRAMES = function(message)
             return
         end
         local replace = argument == "off"
-        PF.db.replaceUnitFrames = replace
-        PF.db.replaceBossFrames = replace
-        PF.db.replacePartyFrames = replace
-        PF.db.replaceRaidFrames = replace
+        PF:SetThemeOption("replaceUnitFrames", replace)
+        PF:SetThemeOption("replaceBossFrames", replace)
+        PF:SetThemeOption("replacePartyFrames", replace)
+        PF:SetThemeOption("replaceRaidFrames", replace)
         PF:Print("Blizzard frames will be " .. (replace and "replaced" or "shown") .. " after reload.")
         ReloadUI()
     elseif command == "reset" then

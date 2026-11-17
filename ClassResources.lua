@@ -146,11 +146,16 @@ local function SafeNumber(value, fallback)
     return fallback
 end
 
-local function GetSpecID()
-    if not GetSpecialization or not GetSpecializationInfo then return nil end
-    local index = GetSpecialization()
+local function GetSpecInfo()
+    local getSpecialization = C_SpecializationInfo and C_SpecializationInfo.GetSpecialization
+        or GetSpecialization
+    local getSpecializationInfo = C_SpecializationInfo and C_SpecializationInfo.GetSpecializationInfo
+        or GetSpecializationInfo
+    if not getSpecialization or not getSpecializationInfo then return nil, nil end
+    local index = getSpecialization()
     if not index then return nil end
-    return GetSpecializationInfo(index)
+    local specID, _, _, _, role = getSpecializationInfo(index)
+    return specID, role
 end
 
 local function ResolveDefinition(testMode)
@@ -183,7 +188,11 @@ local function ResolveDefinition(testMode)
         end
         return nil
     elseif class == "MONK" then
-        if GetSpecID() == 268 then
+        local specID, role = GetSpecInfo()
+        -- Forever exposes specialization through C_SpecializationInfo and uses
+        -- its own spec IDs. Role is stable for the Monk tank specialization;
+        -- retain Retail's ID only as a fallback for standard clients.
+        if role == "TANK" or specID == 268 then
             return {
                 key = "stagger", kind = "bar", stagger = true, defaultMax = 100,
                 native = { "MonkStaggerBar" },
@@ -443,6 +452,8 @@ function PF:SaveClassResourcePosition(display)
     local x, y = display:GetCenter()
     local parentX, parentY = UIParent:GetCenter()
     if not x or not y or not parentX or not parentY then return end
+    x, y = self:ConvertRegionCoordinatesToUIParent(display, x, y)
+    if not x or not y then return end
     self:GetFrameSetting("player").classResourcePosition = { x - parentX, y - parentY }
 end
 
@@ -848,7 +859,9 @@ local function UpdateRunes(display, preview)
                 segment.cooldown:Show()
             elseif GetRuneCooldown then
                 local start, duration = GetRuneCooldown(index)
-                local applied = start and duration and pcall(segment.cooldown.SetCooldown, segment.cooldown, start, duration)
+                local applied = not IsSecret(start) and not IsSecret(duration)
+                    and start ~= nil and duration ~= nil
+                    and pcall(segment.cooldown.SetCooldown, segment.cooldown, start, duration)
                 segment.cooldown:SetShown(applied == true)
             else
                 segment.cooldown:Hide()
@@ -902,7 +915,10 @@ local function UpdateTotems(display, preview)
             else
                 totem:SetAlpha(haveTotem and 1 or 0)
             end
-            if start and duration then pcall(totem.cooldown.SetCooldown, totem.cooldown, start, duration) end
+            local applied = not IsSecret(start) and not IsSecret(duration)
+                and start ~= nil and duration ~= nil
+                and pcall(totem.cooldown.SetCooldown, totem.cooldown, start, duration)
+            totem.cooldown:SetShown(applied == true)
         else
             totem:SetAlpha(0)
         end

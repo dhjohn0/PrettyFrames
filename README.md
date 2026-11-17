@@ -57,6 +57,7 @@ An ornate unit-frame replacement designed for **World of Warcraft: Forever** (`I
 - Movable groups, global scaling, test mode, and optional Blizzard-frame suppression
 - Selectable themes whose art, texture crops, frame sizes, and art-aligned positions live together in human-editable configuration
 - Named configuration profiles with per-character selection, create, copy, rename, reset, and delete controls
+- Optional theme-specific Solo, Party, and Raid layouts, with an Edit Mode selector for previewing and resetting each mode
 
 ## Commands
 
@@ -75,13 +76,13 @@ The addon hides Blizzard unit/group frames by default. Boss replacement remains 
 
 ## Notes
 
-Frame movement and test-mode changes are intentionally blocked during combat. Raid frames omit 3D models to avoid maintaining forty live model widgets during large encounters.
+Frame movement and test-mode changes are intentionally blocked during combat. Group-layout changes that occur during combat are safely coalesced and applied afterward. Raid frames omit 3D models to avoid maintaining forty live model widgets during large encounters.
 
 Action bindings are prepared outside combat and executed by the unit frames' secure templates. Keyboard bindings temporarily override their normal key only while the pointer is over a PrettyFrames unit frame, and the captured modifier combination is shown separately in the binding row. Party and Raid unit reassignment and sorting are deferred during combat, so the displayed frame and its protected `unit` attribute cannot diverge. Blizzard macros keep their own targeting rules; use `@mouseover`, `@target`, or other macro conditionals when desired. Macro identity is validated by slot/name/body, and a missing or ambiguous macro is left unbound instead of risking execution of a different macro.
 
 ## Source layout
 
-- `Core.lua`, `Database.lua`, and `Runtime.lua` initialize the addon, saved settings, and event routing.
+- `Core.lua`, `Database.lua`, `GroupLayouts.lua`, and `Runtime.lua` initialize the addon, saved settings, group-mode layouts, and event routing.
 - `Actions.lua` owns action profiles, validation, cursor parsing, and protected attributes; `ActionsUI.lua` owns the editor.
 - `FrameBehaviors.lua` and the `*Behavior.lua` modules provide reusable frame settings and displays, including movement, visibility, health/power presentation, range fading, threat, indicators, and context-menu behavior.
 - `FrameSettings.lua` coordinates saved frame settings, locking, and the shared behavior modules.

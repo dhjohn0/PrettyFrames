@@ -258,16 +258,10 @@ Export-Asset 'StatusBar' 512 64 {
     }
 } $null
 
-Export-Asset 'CastBarFrame' 1024 128 {
+Export-Asset 'CastBarEndCap' 128 128 {
     param($canvas)
-    $path = Join-Path $sourceRoot 'CastBarFrame.png'
-    $source = [System.Drawing.Bitmap]::FromFile($path)
-    $bounds = Get-AlphaBounds $source
-    $source.Dispose()
-    # The generated ornament is roughly 6.4:1 while the runtime contract is
-    # 8:1. Widen its visible rails without changing the holder geometry so the
-    # caps extend beyond the live bar at every configured cast-bar size.
-    Draw-Image $canvas $path ([System.Drawing.Rectangle]::new(40, 0, 944, 128)) $bounds
+    $destination = [System.Drawing.Rectangle]::new(0, 0, 128, 128)
+    Draw-Image $canvas (Join-Path $sourceRoot 'CastBarEndCap.png') $destination $null
 } $null
 Export-Asset 'CastBarInterruptGlow' 1024 128 {
     param($canvas)

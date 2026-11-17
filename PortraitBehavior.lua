@@ -121,7 +121,7 @@ end
 function PortraitBehavior:SetEnabled(enabled)
     enabled = enabled == true
     if PF.db.enable3DPortraits == enabled then return false end
-    PF.db.enable3DPortraits = enabled
+    PF:SetThemeOption("enable3DPortraits", enabled)
     self:RefreshAll()
     return true
 end

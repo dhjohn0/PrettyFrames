@@ -29,6 +29,12 @@ local function ValueIsSecret(value)
     return issecretvalue and issecretvalue(value)
 end
 
+local function HasCastValue(value)
+    return ValueIsSecret(value) or value ~= nil
+end
+
+CastBars.HasCastValue = HasCastValue
+
 local function GetOrnamentSize(barWidth, extraWidth, minHeight)
     local width = barWidth + (extraWidth or themeLayout.ornamentExtraWidth)
     local height = math.max(
@@ -43,7 +49,9 @@ local function SetOrnamentGeometry(region, bar, barWidth, extraWidth, point, min
     PF:SetThemePoint(region, bar, point or themeLayout.ornamentPoint)
 end
 
-local function CreateCastBarOrnament(bar, barWidth, extraWidth, minHeight, point, themeFrameName)
+local function CreateCastBarOrnament(
+    bar, barWidth, extraWidth, minHeight, point, themeFrameName, autoVisibility
+)
     -- Forever clips textures created directly on a StatusBar to its animated
     -- fill. Keep the decoration on a sibling frame so its caps stay attached
     -- to the full bar rather than moving with cast progress.
@@ -51,21 +59,52 @@ local function CreateCastBarOrnament(bar, barWidth, extraWidth, minHeight, point
     SetOrnamentGeometry(holder, bar, barWidth, extraWidth, point, minHeight)
     holder:SetFrameLevel(bar:GetFrameLevel() + 2)
     holder:EnableMouse(false)
-    holder.texture = holder:CreateTexture(nil, "OVERLAY", nil, 7)
-    holder.texture:SetAllPoints(holder)
     themeFrameName = themeFrameName or bar.themeFrameName or "castBar"
-    holder.texture:SetTexture(PF:ThemeFrameAsset(
-        themeFrameName, "castBarFrame", "castBarFrame"
-    ))
+    local capAsset = PF:ThemeFrameAsset(
+        themeFrameName, "castBarEndCap", "castBarEndCap"
+    )
+    local capSize = themeLayout.endCapBarScale
+        and bar:GetHeight() * themeLayout.endCapBarScale
+        or holder:GetHeight() * (themeLayout.endCapScale or 1)
+    local capOffsetX = capSize * (
+        themeLayout.castEndCapOffsetX or themeLayout.endCapOffsetX or 0
+    )
+    local capOffsetY = capSize * (
+        themeLayout.castEndCapOffsetY or themeLayout.endCapOffsetY or 0
+    )
+
+    -- Constrain each texture inside an explicitly sized child frame. This
+    -- makes runtime geometry authoritative even on clients that preserve a
+    -- texture's native 128px dimensions despite SetSize on the region.
+    holder.leftCap = CreateFrame("Frame", nil, holder)
+    holder.leftCap:SetFrameLevel(holder:GetFrameLevel() + 1)
+    holder.leftCap:EnableMouse(false)
+    holder.leftCap:SetSize(capSize, capSize)
+    holder.leftCap:SetPoint("LEFT", holder, "LEFT", -capOffsetX, capOffsetY)
+    holder.leftCap.texture = holder.leftCap:CreateTexture(nil, "OVERLAY", nil, 7)
+    holder.leftCap.texture:SetAllPoints(holder.leftCap)
+    holder.leftCap.texture:SetTexture(capAsset)
+
+    holder.rightCap = CreateFrame("Frame", nil, holder)
+    holder.rightCap:SetFrameLevel(holder:GetFrameLevel() + 1)
+    holder.rightCap:EnableMouse(false)
+    holder.rightCap:SetSize(capSize, capSize)
+    holder.rightCap:SetPoint("RIGHT", holder, "RIGHT", capOffsetX, capOffsetY)
+    holder.rightCap.texture = holder.rightCap:CreateTexture(nil, "OVERLAY", nil, 7)
+    holder.rightCap.texture:SetAllPoints(holder.rightCap)
+    holder.rightCap.texture:SetTexture(capAsset)
+    holder.rightCap.texture:SetTexCoord(1, 0, 0, 1)
     holder:Hide()
 
-    bar:HookScript("OnShow", function()
-        holder:Show()
-    end)
-    bar:HookScript("OnHide", function()
-        holder:Hide()
-    end)
-    if bar:IsShown() then holder:Show() end
+    if autoVisibility ~= false then
+        bar:HookScript("OnShow", function()
+            holder:Show()
+        end)
+        bar:HookScript("OnHide", function()
+            holder:Hide()
+        end)
+        if bar:IsShown() then holder:Show() end
+    end
     return holder
 end
 
@@ -141,14 +180,15 @@ local function RefreshUnitCastBar(castBar)
     local name, text, texture, startTime, endTime, _, _, notInterruptible = UnitCastingInfo(castBar.unit)
     local kind = "cast"
     local duration
-    if name then
+    if HasCastValue(name) then
         duration = UnitCastingDuration and UnitCastingDuration(castBar.unit)
     else
         local empowered
         name, text, texture, startTime, endTime, _, notInterruptible, _, empowered = UnitChannelInfo(castBar.unit)
-        if name then
-            kind = empowered and "empower" or "channel"
-            if empowered and UnitEmpoweredChannelDuration then
+        if HasCastValue(name) then
+            local isEmpowered = not ValueIsSecret(empowered) and empowered == true
+            kind = isEmpowered and "empower" or "channel"
+            if isEmpowered and UnitEmpoweredChannelDuration then
                 duration = UnitEmpoweredChannelDuration(castBar.unit)
             elseif UnitChannelDuration then
                 duration = UnitChannelDuration(castBar.unit)
@@ -156,7 +196,7 @@ local function RefreshUnitCastBar(castBar)
         end
     end
 
-    if not name then
+    if not HasCastValue(name) then
         castBar.fallbackStart = nil
         castBar.fallbackEnd = nil
         if castBar.interruptibleGlow then castBar.interruptibleGlow:Hide() end
@@ -175,7 +215,8 @@ local function RefreshUnitCastBar(castBar)
     castBar.fallbackStart = nil
     castBar.fallbackEnd = nil
 
-    if duration and castBar.SetTimerDuration and Enum.StatusBarTimerDirection then
+    if not ValueIsSecret(duration) and duration ~= nil
+        and castBar.SetTimerDuration and Enum.StatusBarTimerDirection then
         local direction = kind == "channel"
             and Enum.StatusBarTimerDirection.RemainingTime
             or Enum.StatusBarTimerDirection.ElapsedTime
@@ -229,7 +270,8 @@ local function CreateUnitCastBar(
     castBar.Text:SetFont(font, math.max(9, height - 3), flags)
 
     castBar.ornament = CreateCastBarOrnament(
-        castBar, width, ornamentExtraWidth, nil, nil, castBar.themeFrameName
+        castBar, width, ornamentExtraWidth, nil, nil,
+        castBar.themeFrameName, false
     )
 
     castBar.interruptibleGlow = CreateInterruptibleGlow(
@@ -267,11 +309,18 @@ local function CreateUnitCastBar(
     local previewFont, _, previewFlags = preview.Text:GetFont()
     preview.Text:SetFont(previewFont, math.max(9, height - 3), previewFlags)
 
-    -- SetAllPoints dimensions are not guaranteed to resolve until the next UI
-    -- layout pass, so pass the known bar width instead of reading GetWidth().
-    preview.ornament = CreateCastBarOrnament(
-        preview, width, ornamentExtraWidth, nil, nil, preview.themeFrameName
-    )
+    -- Live and preview bars occupy identical geometry, so share the complete
+    -- ornament tree. This removes a second set of visibility hooks, frame
+    -- levels, and cap geometry that can drift from the live presentation.
+    preview.ornament = castBar.ornament
+    local function RefreshSharedOrnamentVisibility()
+        castBar.ornament:SetShown(castBar:IsShown() or preview:IsShown())
+    end
+    castBar:HookScript("OnShow", RefreshSharedOrnamentVisibility)
+    castBar:HookScript("OnHide", RefreshSharedOrnamentVisibility)
+    preview:HookScript("OnShow", RefreshSharedOrnamentVisibility)
+    preview:HookScript("OnHide", RefreshSharedOrnamentVisibility)
+    RefreshSharedOrnamentVisibility()
 
     preview:SetScript("OnUpdate", function(widget)
         widget:SetValue((GetTime() % 2.8) / 2.8)
@@ -283,12 +332,10 @@ local function CreateUnitCastBar(
     table.insert(PF.castBars, castBar)
 
     for _, event in ipairs(CAST_EVENTS) do
-        if not C_EventUtils or not C_EventUtils.IsEventValid or C_EventUtils.IsEventValid(event) then
-            castBar:RegisterUnitEvent(event, unit)
-        end
+        PF:RegisterEventSafe(castBar, event, unit)
     end
-    if updateEvent then castBar:RegisterEvent(updateEvent) end
-    castBar:RegisterEvent("PLAYER_ENTERING_WORLD")
+    if updateEvent then PF:RegisterEventSafe(castBar, updateEvent) end
+    PF:RegisterEventSafe(castBar, "PLAYER_ENTERING_WORLD")
     castBar:SetScript("OnEvent", function(widget, event)
         if event == "UNIT_SPELLCAST_INTERRUPTED" then
             widget.fallbackStart = nil
@@ -359,15 +406,13 @@ function PF:RefreshCastBarDisplay(castBar)
     if castBar.preview then
         showPreview = (self.testMode == true or self.db.locked == false) and not hidden
         castBar.preview:SetShown(showPreview)
-        if showPreview and castBar.interruptibleGlow then
+        if showPreview and castBar.interruptibleGlow
+            and castBar.unit ~= "player" then
             -- The live glow is a sibling layer and is not clipped by the
             -- StatusBar fill. Reuse it for the identically anchored test
             -- bar instead of maintaining a second clipped preview glow.
-            -- Show it on Player previews as well so every theme can be
-            -- visually checked; live Player casts remain suppressed.
-            -- The preview StatusBar sits one level above the live bar and
-            -- its ornament sits two levels above preview. Raise the glow
-            -- above both so the additive signal is never occluded.
+            -- Raise the glow above the shared cap wrappers so the additive
+            -- signal is never occluded.
             castBar.interruptibleGlow:SetFrameLevel(
                 castBar.preview:GetFrameLevel() + 3
             )

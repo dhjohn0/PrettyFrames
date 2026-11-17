@@ -124,9 +124,13 @@ function AttachedPositionBehavior:RegisterEditing(attachment)
                 if attachment.options.isIndependent() and not PF.db.locked
                     and not InCombatLockdown() then
                     dragFrame:StartMoving()
+                    attachment.dragging = true
                 end
             end)
             region:SetScript("OnDragStop", function()
+                if not attachment.dragging then return end
+                attachment.dragging = nil
+                if InCombatLockdown() then return end
                 dragFrame:StopMovingOrSizing()
                 if attachment.options.isIndependent() then
                     attachment.options.savePosition()

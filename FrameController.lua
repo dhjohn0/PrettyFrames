@@ -25,6 +25,9 @@ function PF:CreateAllFrames()
     if self.CreateClassResourceDisplay then
         self:CreateClassResourceDisplay()
     end
+    if self.CreateExperienceBars then
+        self:CreateExperienceBars()
+    end
     local focus = self:CreateOrnateUnitFrame(
         "PrettyFramesFocus", "focus",
         focusLayout.focusSize[1], focusLayout.focusSize[2], "focus"
@@ -42,6 +45,7 @@ function PF:CreateAllFrames()
         targetTargetLayout.targetOfTargetSize[1], targetTargetLayout.targetOfTargetSize[2],
         nil, true, true
     )
+    self.frames.targettarget = targetTarget
     targetTarget:SetParent(target)
     self:SetThemePoint(targetTarget, target, targetTargetLayout.targetOfTargetAttach)
     self.FrameBehaviors:Attach("attachedPosition", targetTarget, {
@@ -50,7 +54,9 @@ function PF:CreateAllFrames()
         contextMenuScope = "move",
         clampToScreen = false,
         getDragFrame = function() return targetTarget end,
-        getDragRegions = function() return { targetTarget } end,
+        getDragRegions = function()
+            return { targetTarget.moveHandle }
+        end,
         isIndependent = function()
             return PF:GetFrameSetting("targettarget").independentPositioning == true
         end,

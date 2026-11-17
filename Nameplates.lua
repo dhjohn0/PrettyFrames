@@ -269,11 +269,11 @@ local function UpdateCastInterruptGlow(unitFrame, event)
 
     local kind = "cast"
     local name, _, _, _, _, _, _, notInterruptible = UnitCastingInfo(unit)
-    if not name then
+    if not PF.CastBars.HasCastValue(name) then
         kind = "channel"
         name, _, _, _, _, _, notInterruptible = UnitChannelInfo(unit)
     end
-    if not name then
+    if not PF.CastBars.HasCastValue(name) then
         castBar.prettyFramesInterruptibleGlow:Hide()
         return
     end
@@ -563,16 +563,13 @@ function PF:RefreshNameplateHealth()
 end
 
 local driver = CreateFrame("Frame")
-driver:RegisterEvent("NAME_PLATE_UNIT_ADDED")
-driver:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
-driver:RegisterEvent("UNIT_HEALTH")
-driver:RegisterEvent("UNIT_MAXHEALTH")
-driver:RegisterEvent("UNIT_LEVEL")
-driver:RegisterEvent("UNIT_FACTION")
-driver:RegisterEvent("UNIT_FLAGS")
-driver:RegisterEvent("PLAYER_TARGET_CHANGED")
-driver:RegisterEvent("RAID_TARGET_UPDATE")
-driver:RegisterEvent("PLAYER_ENTERING_WORLD")
+for _, event in ipairs({
+    "NAME_PLATE_UNIT_ADDED", "NAME_PLATE_UNIT_REMOVED",
+    "UNIT_HEALTH", "UNIT_MAXHEALTH", "UNIT_LEVEL", "UNIT_FACTION", "UNIT_FLAGS",
+    "PLAYER_TARGET_CHANGED", "RAID_TARGET_UPDATE", "PLAYER_ENTERING_WORLD",
+}) do
+    PF:RegisterEventSafe(driver, event)
+end
 for _, event in ipairs({
     "UNIT_SPELLCAST_START",
     "UNIT_SPELLCAST_CHANNEL_START",
@@ -580,9 +577,7 @@ for _, event in ipairs({
     "UNIT_SPELLCAST_INTERRUPTIBLE",
     "UNIT_SPELLCAST_NOT_INTERRUPTIBLE",
 }) do
-    if not C_EventUtils or not C_EventUtils.IsEventValid or C_EventUtils.IsEventValid(event) then
-        driver:RegisterEvent(event)
-    end
+    PF:RegisterEventSafe(driver, event)
 end
 driver:SetScript("OnEvent", function(_, event, unit)
     if not NameplateReplacementEnabled() then return end

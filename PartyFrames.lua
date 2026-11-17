@@ -732,9 +732,15 @@ function PF:PerformPartyGroupLayout()
 
     anchor.moveHandle:ClearAllPoints()
     -- `ordered[1]` is always the visual top frame after the growth offsets are
-    -- applied. Anchor the handle to that frame instead of reconstructing its
-    -- position from the Party anchor and a possibly stale active count.
-    anchor.moveHandle:SetPoint("BOTTOMLEFT", ordered[1], "TOPLEFT", 0, 5)
+    -- applied. Its local OPTIONS plate already occupies the first row above
+    -- that frame, so stack the global MOVE plate above it instead of placing
+    -- both handles on the same point.
+    local firstLocalHandle = ordered[1] and ordered[1].moveHandle
+    if firstLocalHandle then
+        anchor.moveHandle:SetPoint("BOTTOMLEFT", firstLocalHandle, "TOPLEFT", 0, 5)
+    else
+        anchor.moveHandle:SetPoint("BOTTOMLEFT", ordered[1], "TOPLEFT", 0, 5)
+    end
 
     local pairs = {}
     for index = 1, #ordered - 1 do

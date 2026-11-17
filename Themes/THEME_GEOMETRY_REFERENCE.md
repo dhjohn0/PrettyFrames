@@ -30,7 +30,7 @@ Alpha bounds describe painted content, not required openings.
 | statusBar | 512 × 64 | x 0, y 0, 512 × 64 | 100% | 512 × 64 | x 0, y 0, 512 × 64 | 100% | 512 × 64 | x 0, y 0, 512 × 64 | 100% |
 | portraitFrame | 256 × 256 | x 0, y 0, 256 × 256 | 100% | 256 × 256 | x 0, y 0, 256 × 256 | 100% | 256 × 256 | x 8, y 4, 239 × 246 | 40.47% |
 | indicatorFrame | 128 × 128 | x 3, y 3, 121 × 123 | 35.75% | 128 × 128 | x 2, y 3, 122 × 122 | 35.68% | 128 × 128 | x 11, y 2, 106 × 122 | 35.52% |
-| castBarFrame | 1024 × 128 | x 4, y 32, 1016 × 64 | 5.44% | 1024 × 128 | x 40, y 0, 944 × 128 | 15.34% | 1024 × 128 | x 0, y 2, 1024 × 123 | 48.18% |
+| castBarEndCap | 128 × 128 | x 0, y 32, 128 × 64 | 21.73% | 128 × 128 | x 4, y 16, 120 × 96 | 34.55% | 128 × 128 | x 18, y 8, 92 × 112 | 33.7% |
 | castBarInterruptGlow | 1024 × 128 | x 109, y 14, 803 × 98 | 28.08% | 1024 × 128 | x 0, y 0, 1024 × 128 | 76.63% | 1024 × 128 | x 112, y 1, 799 × 127 | 35.87% |
 | playerFrameWithPet | 1024 × 512 | x 0, y 18, 1024 × 472 | 43.37% | 1024 × 512 | x 1, y 19, 1023 × 457 | 41.32% | 1024 × 512 | x 8, y 9, 1013 × 493 | 62.05% |
 | playerFrameWithPetHealthOnly | 1024 × 512 | x 1, y 19, 1023 × 457 | 41.32% | — | — | — | — | — | — |
@@ -50,13 +50,13 @@ Alpha bounds describe painted content, not required openings.
 | raidLeavesAspen | 256 × 256 | x 16, y 20, 224 × 216 | 32.74% | 256 × 256 | x 16, y 21, 224 × 213 | 30.79% | 256 × 256 | x 10, y 11, 236 × 234 | 41.02% |
 | nameplateFrame | 1024 × 256 | x 0, y 3, 1024 × 251 | 70.41% | 1024 × 256 | x 0, y 3, 1024 × 251 | 70.41% | 1024 × 256 | x 2, y 17, 1020 × 221 | 74.43% |
 | restingIndicator | 512 × 256 | x 29, y 18, 453 × 220 | 42.83% | 512 × 256 | x 132, y 20, 247 × 216 | 16.1% | 512 × 256 | x 8, y 38, 496 × 180 | 41.6% |
-| classResourcePointFrame | 128 × 128 | x 4, y 4, 120 × 120 | 25.26% | — | — | — | — | — | — |
-| classResourceBarFrame | 1024 × 128 | x 8, y 22, 1008 × 85 | 23.53% | — | — | — | — | — | — |
-| classResourceTotemFrame | 128 × 128 | x 8, y 4, 113 × 120 | 33.11% | — | — | — | — | — | — |
-| classResourceJewelActive | 128 × 128 | x 6, y 6, 116 × 116 | 64.96% | — | — | — | — | — | — |
-| classResourceJewelEmpty | 128 × 128 | x 7, y 6, 114 × 116 | 63.68% | — | — | — | — | — | — |
-| classResourceAmmoActive | 128 × 128 | x 26, y 6, 75 × 116 | 26.82% | — | — | — | — | — | — |
-| classResourceAmmoEmpty | 128 × 128 | x 27, y 6, 74 × 116 | 26.72% | — | — | — | — | — | — |
+| classResourcePointFrame | 128 × 128 | x 4, y 4, 120 × 120 | 25.26% | 128 × 128 | x 4, y 4, 120 × 120 | 25.81% | 128 × 128 | x 9, y 4, 110 × 120 | 30.51% |
+| classResourceBarFrame | 1024 × 128 | x 8, y 22, 1008 × 85 | 23.53% | 1024 × 128 | x 8, y 20, 1008 × 89 | 24.47% | 1024 × 128 | x 8, y 12, 1008 × 104 | 37.48% |
+| classResourceTotemFrame | 128 × 128 | x 8, y 4, 113 × 120 | 33.11% | 128 × 128 | x 4, y 4, 119 × 120 | 36.88% | 128 × 128 | x 4, y 4, 120 × 119 | 43.38% |
+| classResourceJewelActive | 128 × 128 | x 6, y 6, 116 × 116 | 64.96% | 128 × 128 | x 6, y 6, 115 × 116 | 63.9% | 128 × 128 | x 6, y 6, 115 × 116 | 64.08% |
+| classResourceJewelEmpty | 128 × 128 | x 7, y 6, 114 × 116 | 63.68% | 128 × 128 | x 7, y 6, 114 × 116 | 63.35% | 128 × 128 | x 7, y 6, 114 × 116 | 63.29% |
+| classResourceAmmoActive | 128 × 128 | x 26, y 6, 75 × 116 | 26.82% | 128 × 128 | x 27, y 6, 74 × 116 | 26.5% | 128 × 128 | x 24, y 6, 79 × 116 | 30.55% |
+| classResourceAmmoEmpty | 128 × 128 | x 27, y 6, 74 × 116 | 26.72% | 128 × 128 | x 26, y 6, 76 × 116 | 30.09% | 128 × 128 | x 26, y 6, 77 × 116 | 29.92% |
 
 ## Complete resolved theme layout comparison
 
@@ -65,11 +65,13 @@ This is a leaf-level inventory. Identical values are still shown because they pr
 | Layout path | Verdant | Moonlight | Orgrimmar | Comparison |
 |---|---|---|---|---|
 | bossFrames.auraIconSize | 36 | 36 | 46 | different |
-| bossFrames.auraSideInset | 36 | 44 | 44 | different |
+| bossFrames.auraSideInset | 36 | 33 | 22 | different |
 | bossFrames.castBarOffset | { 0, 12 } | { 0, 12 } | { 0, 12 } | same |
 | bossFrames.castBarOrnamentExtraWidth | 54 | 54 | 42 | different |
 | bossFrames.castBarSize | { 215, 14 } | { 215, 14 } | { 230, 16 } | different |
-| bossFrames.frameGap | 0 | 0 | 0 | same |
+| bossFrames.frameGap | 0 | 0 | 5 | different |
+| castBar.endCapBarScale | — | 2.5 | — | different |
+| castBar.endCapOffsetX | — | -0.2 | — | different |
 | castBar.iconExtraSize | 4 | 4 | 6 | different |
 | castBar.iconPoint | { LEFT, LEFT, 1, 0 } | { LEFT, LEFT, 1, 0 } | { LEFT, LEFT, 11, 0 } | different |
 | castBar.interruptGlowAlpha | 0.72 | 1 | 0.68 | different |
@@ -80,39 +82,43 @@ This is a leaf-level inventory. Identical values are still shown because they pr
 | castBar.ornamentExtraWidth | 76 | 76 | 92 | different |
 | castBar.ornamentMinHeight | 38 | 38 | 42 | different |
 | castBar.ornamentPoint | { CENTER, CENTER, 0, 2 } | { CENTER, CENTER, 0, 0 } | { CENTER, CENTER, 0, 0 } | different |
+| castBar.progressBarGap | 3 | 3 | 3 | same |
+| castBar.progressBarHeight | 22 | 22 | 22 | same |
+| castBar.progressOrnamentExtraWidth | 100 | — | 68 | different |
+| castBar.progressOrnamentHeight | 62 | 92 | 64 | different |
 | castBar.textLeft | 4 | 4 | 6 | different |
 | castBar.textRight | -5 | -5 | -6 | different |
-| classResources.ammoArcAngle | 50 | — | — | different |
-| classResources.ammoOffset | { -2, 0 } | — | — | different |
-| classResources.ammoSize | 48 | — | — | different |
-| classResources.barArtSize | { 250, 32 } | — | — | different |
-| classResources.barPoint | { CENTER, TOPLEFT, 319, -142 } | — | — | different |
-| classResources.barSize | { 210, 14 } | — | — | different |
-| classResources.comboPointOffset | { -6, -2 } | — | — | different |
-| classResources.handled.bar | true | — | — | different |
-| classResources.handled.itemCount | true | — | — | different |
-| classResources.handled.points | true | — | — | different |
-| classResources.handled.runes | true | — | — | different |
-| classResources.handled.totems | true | — | — | different |
-| classResources.itemCountArcAngle | 50 | — | — | different |
-| classResources.itemCountOffset | { -2, 0 } | — | — | different |
-| classResources.itemCountSize | 48 | — | — | different |
-| classResources.itemCountTextOffsetY | -7 | — | — | different |
-| classResources.playerPoint | { BOTTOM, TOP, 55, 8 } | — | — | different |
-| classResources.pointResourceArcAngle | 55 | — | — | different |
-| classResources.pointResourceArcRadius | 64 | — | — | different |
-| classResources.pointResourceArcRadiusX | 64 | — | — | different |
-| classResources.pointResourceArcSpacing | 4 | — | — | different |
-| classResources.pointResourceOffset | { 0, 0 } | — | — | different |
-| classResources.pointResourceSize | 30 | — | — | different |
-| classResources.pointSize | 20 | — | — | different |
-| classResources.pointSpacing | 4 | — | — | different |
-| classResources.sixPointArcAngle | 73 | — | — | different |
-| classResources.targetPoint | { BOTTOM, TOP, -55, 8 } | — | — | different |
-| classResources.totemArcPositions | { { -100, 72 }, { -114, 24 }, { -114, -24 }, { -100, -72 } } | — | — | different |
-| classResources.totemIconInset | 4 | — | — | different |
-| classResources.totemSize | 42 | — | — | different |
-| classResources.totemSpacing | 4 | — | — | different |
+| classResources.ammoArcAngle | 50 | 50 | 50 | same |
+| classResources.ammoOffset | { -2, 0 } | { -2, 0 } | { -1, 0 } | different |
+| classResources.ammoSize | 48 | 48 | 46 | different |
+| classResources.barArtSize | { 250, 32 } | { 250, 32 } | { 242, 31 } | different |
+| classResources.barPoint | { CENTER, TOPLEFT, 319, -142 } | { CENTER, TOPLEFT, 319, -142 } | { CENTER, TOPLEFT, 302, -158 } | different |
+| classResources.barSize | { 210, 14 } | { 210, 14 } | { 210, 13 } | different |
+| classResources.comboPointOffset | { -6, -2 } | { -6, -2 } | { -5, -1 } | different |
+| classResources.handled.bar | true | true | true | same |
+| classResources.handled.itemCount | true | true | true | same |
+| classResources.handled.points | true | true | true | same |
+| classResources.handled.runes | true | true | true | same |
+| classResources.handled.totems | true | true | true | same |
+| classResources.itemCountArcAngle | 50 | 50 | 50 | same |
+| classResources.itemCountOffset | { -2, 0 } | { -2, 0 } | { -1, 0 } | different |
+| classResources.itemCountSize | 48 | 48 | 46 | different |
+| classResources.itemCountTextOffsetY | -7 | -7 | -7 | same |
+| classResources.playerPoint | { BOTTOM, TOP, 55, 8 } | { BOTTOM, TOP, 55, 8 } | { BOTTOM, TOP, 52, 8 } | different |
+| classResources.pointResourceArcAngle | 55 | 55 | 55 | same |
+| classResources.pointResourceArcRadius | 64 | 64 | 59 | different |
+| classResources.pointResourceArcRadiusX | 64 | 64 | 59 | different |
+| classResources.pointResourceArcSpacing | 4 | 4 | 4 | same |
+| classResources.pointResourceOffset | { 0, 0 } | { 0, 0 } | { -1, 0 } | different |
+| classResources.pointResourceSize | 30 | 30 | 29 | different |
+| classResources.pointSize | 20 | 20 | 20 | same |
+| classResources.pointSpacing | 4 | 4 | 4 | same |
+| classResources.sixPointArcAngle | 73 | 73 | 76 | different |
+| classResources.targetPoint | { BOTTOM, TOP, -55, 8 } | { BOTTOM, TOP, -55, 8 } | { BOTTOM, TOP, -52, 8 } | different |
+| classResources.totemArcPositions | { { -100, 72 }, { -114, 24 }, { -114, -24 }, { -100, -72 } } | { { -100, 72 }, { -114, 24 }, { -114, -24 }, { -100, -72 } } | { { -92, 66 }, { -104, 22 }, { -104, -22 }, { -92, -66 } } | different |
+| classResources.totemIconInset | 4 | 4 | 4 | same |
+| classResources.totemSize | 42 | 42 | 40 | different |
+| classResources.totemSpacing | 4 | 4 | 4 | same |
 | nameplate.artPoint | { CENTER, CENTER, -8, 5 } | { CENTER, CENTER, -8, 5 } | { CENTER, CENTER, -4, 4 } | different |
 | nameplate.artSize | { 180, 45 } | { 180, 45 } | { 196, 49 } | different |
 | nameplate.castHeight | 12 | 12 | 13 | different |
@@ -333,6 +339,9 @@ This is a leaf-level inventory. Identical values are still shown because they pr
 | unitFrames.full.points.status | { RIGHT, RIGHT, -5, 0 } | { RIGHT, RIGHT, -5, 0 } | { RIGHT, RIGHT, -5, 0 } | same |
 | unitFrames.full.portraitSize | 103 | 103 | 108 | different |
 | unitFrames.full.powerHeight | 21 | 21 | 13 | different |
+| unitFrames.full.threatGlowOffsetX | 7 | 7 | 3 | different |
+| unitFrames.full.threatGlowOffsetY | -6 | -6 | — | different |
+| unitFrames.full.threatGlowScale | 1.28 | 1.28 | — | different |
 | unitFrames.portraitBackgroundAsset | — | — | portraitBackgroundRound | different |
 | unitFrames.portraitBackgroundScaleX | — | — | 1 | different |
 | unitFrames.portraitBackgroundScaleY | — | — | 1 | different |
@@ -372,6 +381,8 @@ This is a leaf-level inventory. Identical values are still shown because they pr
 | unitFrames.scaled.powerLeft | 0.32 | 0.32 | 0.34 | different |
 | unitFrames.scaled.powerRight | 0.1 | 0.1 | 0.13 | different |
 | unitFrames.scaled.powerY | -0.64 | -0.64 | -0.63 | different |
+| unitFrames.scaled.threatGlowOffsetX | 4 | 4 | 2 | different |
+| unitFrames.scaled.threatGlowScale | 1.27 | 1.27 | — | different |
 | unitFrames.targetOfTarget.artCrop | — | — | { 0, 1, 0.17, 0.83 } | different |
 | unitFrames.targetOfTarget.auraIconSize | 18 | 18 | 23 | different |
 | unitFrames.targetOfTarget.auras | { 120, 246, -22, -37, 0 } | { 120, 246, -22, -37, 0 } | { 124, 254, -28, -44, 0 } | different |
@@ -472,25 +483,29 @@ Rectangles below combine configured sizes, anchor tuples, runtime-derived dimens
 | Player cast | Spell icon | live cast bar | x 1, y -2, 22 × 22 | castBar.iconPoint + iconExtraSize | — | — |  |
 | Player cast | Cast text | spell icon right edge to live bar right | left gap 4, right inset 5, vertically centered; font size 15 | castBar.textLeft/textRight + runtime font rule | — | — |  |
 | Player cast | Ornament | live cast bar | x -38, y -18.56, 409 × 51.13 | castBar ornament point/extra/aspect/minimum | — | — | sibling overlay; dimensions derived at runtime |
-| Player cast | Bar opening in ornament art | ornament-local | x 38, y 18.56, 333 × 18 | derived from live bar and ornament geometry | x 95.14, y 46.47, 833.72 × 45.07 | 2.83% / 2.5% | lower alpha means less ornament painted across the live fill |
+| Player cast | Left end cap | ornament-local | x 0, y 0, 51.13 × 51.13 | castBarEndCap + cap scale/offset | — | — | single square source asset |
+| Player cast | Right end cap | ornament-local | x 357.88, y 0, 51.13 × 51.13 | castBarEndCap + cap scale/offset | — | — | horizontal mirror of left cap |
 | Player cast | Interrupt glow | live cast bar | x -38, y -16.06, 409 × 51.13 | interruptGlowPoint/crop/alpha + consumer glow extra/minimum | — | — | UV crop { 0.13, 0.87, 0, 1 }, alpha 0.72 |
 | Target cast | Live bar | owning frame | x 0, y 0, 332 × 18 | consumer castBarSize | — | — |  |
 | Target cast | Spell icon | live cast bar | x 1, y -2, 22 × 22 | castBar.iconPoint + iconExtraSize | — | — |  |
 | Target cast | Cast text | spell icon right edge to live bar right | left gap 4, right inset 5, vertically centered; font size 15 | castBar.textLeft/textRight + runtime font rule | — | — |  |
 | Target cast | Ornament | live cast bar | x -38, y -18.5, 408 × 51 | castBar ornament point/extra/aspect/minimum | — | — | sibling overlay; dimensions derived at runtime |
-| Target cast | Bar opening in ornament art | ornament-local | x 38, y 18.5, 332 × 18 | derived from live bar and ornament geometry | x 95.37, y 46.43, 833.25 × 45.18 | 2.83% / 2.5% | lower alpha means less ornament painted across the live fill |
+| Target cast | Left end cap | ornament-local | x 0, y 0, 51 × 51 | castBarEndCap + cap scale/offset | — | — | single square source asset |
+| Target cast | Right end cap | ornament-local | x 357, y 0, 51 × 51 | castBarEndCap + cap scale/offset | — | — | horizontal mirror of left cap |
 | Target cast | Interrupt glow | live cast bar | x -38, y -16, 408 × 51 | interruptGlowPoint/crop/alpha + consumer glow extra/minimum | — | — | UV crop { 0.13, 0.87, 0, 1 }, alpha 0.72 |
 | Focus cast | Live bar | owning frame | x 0, y 0, 249 × 14 | consumer castBarSize | — | — |  |
 | Focus cast | Spell icon | live cast bar | x 1, y -2, 18 × 18 | castBar.iconPoint + iconExtraSize | — | — |  |
 | Focus cast | Cast text | spell icon right edge to live bar right | left gap 4, right inset 5, vertically centered; font size 11 | castBar.textLeft/textRight + runtime font rule | — | — |  |
 | Focus cast | Ornament | live cast bar | x -30, y -14.31, 309 × 38.63 | castBar ornament point/extra/aspect/minimum | — | — | sibling overlay; dimensions derived at runtime |
-| Focus cast | Bar opening in ornament art | ornament-local | x 30, y 14.31, 249 × 14 | derived from live bar and ornament geometry | x 99.42, y 47.43, 825.17 × 46.39 | 2.05% / 1.73% | lower alpha means less ornament painted across the live fill |
+| Focus cast | Left end cap | ornament-local | x 0, y 0, 38.63 × 38.63 | castBarEndCap + cap scale/offset | — | — | single square source asset |
+| Focus cast | Right end cap | ornament-local | x 270.38, y 0, 38.63 × 38.63 | castBarEndCap + cap scale/offset | — | — | horizontal mirror of left cap |
 | Focus cast | Interrupt glow | live cast bar | x -30, y -11.81, 309 × 38.63 | interruptGlowPoint/crop/alpha + consumer glow extra/minimum | — | — | UV crop { 0.13, 0.87, 0, 1 }, alpha 0.72 |
 | Nameplate cast | Live bar | owning frame | x 0, y 0, 130 × 12 | consumer castBarSize | — | — |  |
 | Nameplate cast | Spell icon | live cast bar | x 1, y -2, 16 × 16 | castBar.iconPoint + iconExtraSize | — | — |  |
 | Nameplate cast | Cast text | spell icon right edge to live bar right | left gap 4, right inset 5, vertically centered; font size 9 | castBar.textLeft/textRight + runtime font rule | — | — |  |
 | Nameplate cast | Ornament | live cast bar | x -15, y -11, 160 × 35 | castBar ornament point/extra/aspect/minimum | — | — | sibling overlay; dimensions derived at runtime |
-| Nameplate cast | Bar opening in ornament art | ornament-local | x 15, y 11, 130 × 12 | derived from live bar and ornament geometry | x 96, y 40.23, 832 × 43.89 | 2.55% / 2.16% | lower alpha means less ornament painted across the live fill |
+| Nameplate cast | Left end cap | ornament-local | x 0, y 0, 35 × 35 | castBarEndCap + cap scale/offset | — | — | single square source asset |
+| Nameplate cast | Right end cap | ornament-local | x 125, y 0, 35 × 35 | castBarEndCap + cap scale/offset | — | — | horizontal mirror of left cap |
 | Nameplate cast | Interrupt glow | live cast bar | x -15, y -8.5, 160 × 30 | interruptGlowPoint/crop/alpha + consumer glow extra/minimum | — | — | UV crop { 0.13, 0.87, 0, 1 }, alpha 0.72 |
 
 ## Moonlight derived live-region geometry
@@ -549,25 +564,29 @@ Rectangles below combine configured sizes, anchor tuples, runtime-derived dimens
 | Player cast | Spell icon | live cast bar | x 1, y -2, 22 × 22 | castBar.iconPoint + iconExtraSize | — | — |  |
 | Player cast | Cast text | spell icon right edge to live bar right | left gap 4, right inset 5, vertically centered; font size 15 | castBar.textLeft/textRight + runtime font rule | — | — |  |
 | Player cast | Ornament | live cast bar | x -38, y -16.56, 409 × 51.13 | castBar ornament point/extra/aspect/minimum | — | — | sibling overlay; dimensions derived at runtime |
-| Player cast | Bar opening in ornament art | ornament-local | x 38, y 16.56, 333 × 18 | derived from live bar and ornament geometry | x 95.14, y 41.47, 833.72 × 45.07 | 0.76% / 0.57% | lower alpha means less ornament painted across the live fill |
+| Player cast | Left end cap | ornament-local | x 9, y 3.06, 45 × 45 | castBarEndCap + cap scale/offset | — | — | single square source asset |
+| Player cast | Right end cap | ornament-local | x 355, y 3.06, 45 × 45 | castBarEndCap + cap scale/offset | — | — | horizontal mirror of left cap |
 | Player cast | Interrupt glow | live cast bar | x -38, y -16.06, 409 × 51.13 | interruptGlowPoint/crop/alpha + consumer glow extra/minimum | — | — | UV crop { 0, 1, 0, 1 }, alpha 1 |
 | Target cast | Live bar | owning frame | x 0, y 0, 332 × 18 | consumer castBarSize | — | — |  |
 | Target cast | Spell icon | live cast bar | x 1, y -2, 22 × 22 | castBar.iconPoint + iconExtraSize | — | — |  |
 | Target cast | Cast text | spell icon right edge to live bar right | left gap 4, right inset 5, vertically centered; font size 15 | castBar.textLeft/textRight + runtime font rule | — | — |  |
 | Target cast | Ornament | live cast bar | x -38, y -16.5, 408 × 51 | castBar ornament point/extra/aspect/minimum | — | — | sibling overlay; dimensions derived at runtime |
-| Target cast | Bar opening in ornament art | ornament-local | x 38, y 16.5, 332 × 18 | derived from live bar and ornament geometry | x 95.37, y 41.41, 833.25 × 45.18 | 0.76% / 0.57% | lower alpha means less ornament painted across the live fill |
+| Target cast | Left end cap | ornament-local | x 9, y 3, 45 × 45 | castBarEndCap + cap scale/offset | — | — | single square source asset |
+| Target cast | Right end cap | ornament-local | x 354, y 3, 45 × 45 | castBarEndCap + cap scale/offset | — | — | horizontal mirror of left cap |
 | Target cast | Interrupt glow | live cast bar | x -38, y -16, 408 × 51 | interruptGlowPoint/crop/alpha + consumer glow extra/minimum | — | — | UV crop { 0, 1, 0, 1 }, alpha 1 |
 | Focus cast | Live bar | owning frame | x 0, y 0, 249 × 14 | consumer castBarSize | — | — |  |
 | Focus cast | Spell icon | live cast bar | x 1, y -2, 18 × 18 | castBar.iconPoint + iconExtraSize | — | — |  |
 | Focus cast | Cast text | spell icon right edge to live bar right | left gap 4, right inset 5, vertically centered; font size 11 | castBar.textLeft/textRight + runtime font rule | — | — |  |
 | Focus cast | Ornament | live cast bar | x -30, y -12.31, 309 × 38.63 | castBar ornament point/extra/aspect/minimum | — | — | sibling overlay; dimensions derived at runtime |
-| Focus cast | Bar opening in ornament art | ornament-local | x 30, y 12.31, 249 × 14 | derived from live bar and ornament geometry | x 99.42, y 40.8, 825.17 × 46.39 | 0.67% / 0.49% | lower alpha means less ornament painted across the live fill |
+| Focus cast | Left end cap | ornament-local | x 7, y 1.81, 35 × 35 | castBarEndCap + cap scale/offset | — | — | single square source asset |
+| Focus cast | Right end cap | ornament-local | x 267, y 1.81, 35 × 35 | castBarEndCap + cap scale/offset | — | — | horizontal mirror of left cap |
 | Focus cast | Interrupt glow | live cast bar | x -30, y -11.81, 309 × 38.63 | interruptGlowPoint/crop/alpha + consumer glow extra/minimum | — | — | UV crop { 0, 1, 0, 1 }, alpha 1 |
 | Nameplate cast | Live bar | owning frame | x 0, y 0, 130 × 12 | consumer castBarSize | — | — |  |
 | Nameplate cast | Spell icon | live cast bar | x 1, y -2, 16 × 16 | castBar.iconPoint + iconExtraSize | — | — |  |
 | Nameplate cast | Cast text | spell icon right edge to live bar right | left gap 4, right inset 5, vertically centered; font size 9 | castBar.textLeft/textRight + runtime font rule | — | — |  |
 | Nameplate cast | Ornament | live cast bar | x -15, y -5, 160 × 23 | castBar ornament point/extra/aspect/minimum | — | — | sibling overlay; dimensions derived at runtime |
-| Nameplate cast | Bar opening in ornament art | ornament-local | x 15, y 5, 130 × 12 | derived from live bar and ornament geometry | x 96, y 27.83, 832 × 66.78 | 14.73% / 12.53% | lower alpha means less ornament painted across the live fill |
+| Nameplate cast | Left end cap | ornament-local | x 6, y -3.5, 30 × 30 | castBarEndCap + cap scale/offset | — | — | single square source asset |
+| Nameplate cast | Right end cap | ornament-local | x 124, y -3.5, 30 × 30 | castBarEndCap + cap scale/offset | — | — | horizontal mirror of left cap |
 | Nameplate cast | Interrupt glow | live cast bar | x -15, y -6.5, 160 × 26 | interruptGlowPoint/crop/alpha + consumer glow extra/minimum | — | — | UV crop { 0, 1, 0, 1 }, alpha 1 |
 
 ## Orgrimmar derived live-region geometry
@@ -626,25 +645,29 @@ Rectangles below combine configured sizes, anchor tuples, runtime-derived dimens
 | Player cast | Spell icon | live cast bar | x 11, y -3, 25 × 25 | castBar.iconPoint + iconExtraSize | — | — |  |
 | Player cast | Cast text | spell icon right edge to live bar right | left gap 6, right inset 6, vertically centered; font size 16 | castBar.textLeft/textRight + runtime font rule | — | — |  |
 | Player cast | Ornament | live cast bar | x -26, y -21.25, 492 × 61.5 | castBar ornament point/extra/aspect/minimum | — | — | sibling overlay; dimensions derived at runtime |
-| Player cast | Bar opening in ornament art | ornament-local | x 26, y 21.25, 440 × 19 | derived from live bar and ornament geometry | x 54.11, y 44.23, 915.77 × 39.54 | 9.25% / 7.55% | lower alpha means less ornament painted across the live fill |
+| Player cast | Left end cap | ornament-local | x 0, y 0, 61.5 × 61.5 | castBarEndCap + cap scale/offset | — | — | single square source asset |
+| Player cast | Right end cap | ornament-local | x 430.5, y 0, 61.5 × 61.5 | castBarEndCap + cap scale/offset | — | — | horizontal mirror of left cap |
 | Player cast | Interrupt glow | live cast bar | x -26, y -21.25, 492 × 61.5 | interruptGlowPoint/crop/alpha + consumer glow extra/minimum | — | — | UV crop { 0, 1, 0, 1 }, alpha 0.68 |
 | Target cast | Live bar | owning frame | x 0, y 0, 340 × 19 | consumer castBarSize | — | — |  |
 | Target cast | Spell icon | live cast bar | x 11, y -3, 25 × 25 | castBar.iconPoint + iconExtraSize | — | — |  |
 | Target cast | Cast text | spell icon right edge to live bar right | left gap 6, right inset 6, vertically centered; font size 16 | castBar.textLeft/textRight + runtime font rule | — | — |  |
 | Target cast | Ornament | live cast bar | x -26, y -15, 392 × 49 | castBar ornament point/extra/aspect/minimum | — | — | sibling overlay; dimensions derived at runtime |
-| Target cast | Bar opening in ornament art | ornament-local | x 26, y 15, 340 × 19 | derived from live bar and ornament geometry | x 67.92, y 39.18, 888.16 × 49.63 | 23.39% / 21.09% | lower alpha means less ornament painted across the live fill |
+| Target cast | Left end cap | ornament-local | x 0, y 0, 49 × 49 | castBarEndCap + cap scale/offset | — | — | single square source asset |
+| Target cast | Right end cap | ornament-local | x 343, y 0, 49 × 49 | castBarEndCap + cap scale/offset | — | — | horizontal mirror of left cap |
 | Target cast | Interrupt glow | live cast bar | x -26, y -15, 392 × 49 | interruptGlowPoint/crop/alpha + consumer glow extra/minimum | — | — | UV crop { 0, 1, 0, 1 }, alpha 0.68 |
 | Focus cast | Live bar | owning frame | x 0, y 0, 272 × 16 | consumer castBarSize | — | — |  |
 | Focus cast | Spell icon | live cast bar | x 11, y -3, 22 × 22 | castBar.iconPoint + iconExtraSize | — | — |  |
 | Focus cast | Cast text | spell icon right edge to live bar right | left gap 6, right inset 6, vertically centered; font size 13 | castBar.textLeft/textRight + runtime font rule | — | — |  |
 | Focus cast | Ornament | live cast bar | x -21, y -13, 314 × 42 | castBar ornament point/extra/aspect/minimum | — | — | sibling overlay; dimensions derived at runtime |
-| Focus cast | Bar opening in ornament art | ornament-local | x 21, y 13, 272 × 16 | derived from live bar and ornament geometry | x 68.48, y 39.62, 887.03 × 48.76 | 23.21% / 20.91% | lower alpha means less ornament painted across the live fill |
+| Focus cast | Left end cap | ornament-local | x 0, y 0, 42 × 42 | castBarEndCap + cap scale/offset | — | — | single square source asset |
+| Focus cast | Right end cap | ornament-local | x 272, y 0, 42 × 42 | castBarEndCap + cap scale/offset | — | — | horizontal mirror of left cap |
 | Focus cast | Interrupt glow | live cast bar | x -21, y -13, 314 × 42 | interruptGlowPoint/crop/alpha + consumer glow extra/minimum | — | — | UV crop { 0, 1, 0, 1 }, alpha 0.68 |
 | Nameplate cast | Live bar | owning frame | x 0, y 0, 143 × 13 | consumer castBarSize | — | — |  |
 | Nameplate cast | Spell icon | live cast bar | x 11, y -3, 19 × 19 | castBar.iconPoint + iconExtraSize | — | — |  |
 | Nameplate cast | Cast text | spell icon right edge to live bar right | left gap 6, right inset 6, vertically centered; font size 10 | castBar.textLeft/textRight + runtime font rule | — | — |  |
 | Nameplate cast | Ornament | live cast bar | x -18, y -11.5, 179 × 36 | castBar ornament point/extra/aspect/minimum | — | — | sibling overlay; dimensions derived at runtime |
-| Nameplate cast | Bar opening in ornament art | ornament-local | x 18, y 11.5, 143 × 13 | derived from live bar and ornament geometry | x 102.97, y 40.89, 818.06 × 46.22 | 18.83% / 16.61% | lower alpha means less ornament painted across the live fill |
+| Nameplate cast | Left end cap | ornament-local | x 0, y 0, 36 × 36 | castBarEndCap + cap scale/offset | — | — | single square source asset |
+| Nameplate cast | Right end cap | ornament-local | x 143, y 0, 36 × 36 | castBarEndCap + cap scale/offset | — | — | horizontal mirror of left cap |
 | Nameplate cast | Interrupt glow | live cast bar | x -18, y -9.5, 179 × 32 | interruptGlowPoint/crop/alpha + consumer glow extra/minimum | — | — | UV crop { 0, 1, 0, 1 }, alpha 0.68 |
 
 ## Independent-theme blank worksheet
@@ -661,4 +684,4 @@ Copy this section into the new theme's design notes. Fill it from the intended c
 | Party |  | partyFrame | portrait / health / power / name / level / class / role | Party root |  |  |  | mirrored + connector |  |
 | Raid |  | raidFrame | health / name / role / marker / status | Raid root |  |  |  | three-slice + 40 frames |  |
 | Nameplate |  | nameplateFrame | health / name / level / marker / cast | Blizzard health container |  |  | opaque health backing | native nameplate paths |  |
-| Cast bars |  | castBarFrame + interrupt glow | bar / icon / text / ornament / glow | live cast bar |  |  | transparent interior | all consumers + preview |  |
+| Cast bars |  | castBarEndCap + interrupt glow | bar / icon / text / mirrored end caps / glow | live cast bar |  |  | no center ornament | all consumers + preview |  |

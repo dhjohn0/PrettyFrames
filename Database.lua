@@ -10,8 +10,26 @@ local defaults = {
     replacePartyFrames = true,
     replaceRaidFrames = true,
     replaceNameplates = true,
+    replaceExperienceBar = false,
+    experienceBar = {
+        scale = 1,
+        width = 420,
+        growUpwards = true,
+        showPlayer = true,
+        showPet = true,
+        showReputation = true,
+        showRested = true,
+        playerColorMode = "violet",
+        petColorMode = "emerald",
+        reputationColorMode = "standing",
+        playerTextMode = "currentmax",
+        petTextMode = "currentmax",
+        reputationTextMode = "currentmax",
+        customColors = {},
+    },
     enable3DPortraits = true,
     mirrorPlayerTarget = false,
+    groupLayoutsEnabled = false,
     bossLayout = {
         growUpwards = false,
         independentPositioning = false,
@@ -139,6 +157,49 @@ local function ReadRangeDistance(options)
         and "melee" or "ranged"
 end
 
+local function ReadProgressTextMode(options, key)
+    local mode = type(options) == "table" and options[key]
+    if mode == "current" or mode == "maximum" or mode == "currentmax"
+        or mode == "percent" or mode == "currentpercent" or mode == "none" then
+        return mode
+    end
+    return "currentmax"
+end
+
+local function ReadProgressColorMode(options, key, kind)
+    local mode = type(options) == "table" and options[key]
+    local valid = kind == "player"
+        and (mode == "violet" or mode == "blue" or mode == "gold"
+            or mode == "emerald" or mode == "class" or mode == "custom")
+        or kind == "pet"
+        and (mode == "emerald" or mode == "teal" or mode == "gold"
+            or mode == "player" or mode == "custom")
+        or kind == "reputation"
+        and (mode == "standing" or mode == "blue" or mode == "gold"
+            or mode == "player" or mode == "custom")
+    if valid then return mode end
+    if kind == "player" then return "violet" end
+    if kind == "pet" then return "emerald" end
+    return "standing"
+end
+
+local function ReadProgressCustomColors(options)
+    local colors = {}
+    local saved = type(options) == "table" and options.customColors
+    for _, kind in ipairs({ "player", "pet", "reputation" }) do
+        local color = type(saved) == "table" and saved[kind]
+        if type(color) == "table" and type(color[1]) == "number"
+            and type(color[2]) == "number" and type(color[3]) == "number" then
+            colors[kind] = {
+                math.max(0, math.min(1, color[1])),
+                math.max(0, math.min(1, color[2])),
+                math.max(0, math.min(1, color[3])),
+            }
+        end
+    end
+    return colors
+end
+
 local function ReadPartyDisplayProfile(layout)
     if type(layout) ~= "table" then return defaults.partyLayout.displayProfile end
     local profile = layout.displayProfile
@@ -195,6 +256,83 @@ local function CopyThemePositions(theme, savedPositions)
         end
     end
     return positions
+end
+
+local themeOptionKeys = {
+    "scale",
+    "locked",
+    "replaceUnitFrames",
+    "replaceBossFrames",
+    "replacePartyFrames",
+    "replaceRaidFrames",
+    "replaceNameplates",
+    "replaceExperienceBar",
+    "experienceBar",
+    "enable3DPortraits",
+    "mirrorPlayerTarget",
+    "groupLayoutsEnabled",
+    "groupLayouts",
+    "bossLayout",
+    "partyLayout",
+    "raidLayout",
+    "positions",
+    "frameSettings",
+}
+
+local function CopyTable(value, seen)
+    if type(value) ~= "table" then return value end
+    seen = seen or {}
+    if seen[value] then return seen[value] end
+    local copy = {}
+    seen[value] = copy
+    for key, child in pairs(value) do
+        copy[CopyTable(key, seen)] = CopyTable(child, seen)
+    end
+    return copy
+end
+
+local function CaptureThemeOptions(database, copyTables)
+    local options = {}
+    for _, key in ipairs(themeOptionKeys) do
+        local value = database[key]
+        if key == "positions" and type(database.groupLayouts) == "table"
+            and type(database.groupLayouts.sharedPositions) == "table" then
+            value = database.groupLayouts.sharedPositions
+        end
+        options[key] = copyTables and CopyTable(value) or value
+    end
+    return options
+end
+
+local function ApplyThemeOptions(database, options)
+    for _, key in ipairs(themeOptionKeys) do
+        database[key] = options[key]
+    end
+end
+
+local function GetCastBarPositions(frameSettings)
+    local positions = {}
+    for key, setting in pairs(type(frameSettings) == "table" and frameSettings or {}) do
+        local position = type(setting) == "table" and setting.castBarPosition
+        if type(key) == "string" and type(position) == "table"
+            and type(position[1]) == "number" and type(position[2]) == "number" then
+            positions[key] = { position[1], position[2] }
+        end
+    end
+    return positions
+end
+
+local function ThemeOptionsProfileSource(themeId, options)
+    local source = CaptureThemeOptions(options, true)
+    source.theme = themeId
+    source.themePlacements = {
+        [themeId] = {
+            positions = source.positions,
+            groupOffsets = source.raidLayout and source.raidLayout.groupOffsets,
+            castBarPositions = GetCastBarPositions(source.frameSettings),
+        },
+    }
+    return source
 end
 
 local function ReadHealthTextMode(layout, fallback)
@@ -261,7 +399,7 @@ local function ReadMaintenanceDuration(layout)
     return defaults.raidLayout.maintenanceDuration
 end
 
-local function BuildProfile(self, previous)
+local function BuildProfile(self, previous, buildingThemeOptions)
     previous = type(previous) == "table" and previous or {}
     local selectedThemeId = type(previous.theme) == "string" and self.themes[previous.theme]
         and previous.theme or defaults.theme
@@ -277,9 +415,53 @@ local function BuildProfile(self, previous)
         -- This setting defaults on; an explicit saved false must survive Lua's
         -- `and/or` truthiness when the database is rebuilt.
         replaceNameplates = previous.replaceNameplates ~= false,
+        replaceExperienceBar = previous.replaceExperienceBar == true,
+        experienceBar = {
+            scale = self:IsValidScale(
+                type(previous.experienceBar) == "table" and previous.experienceBar.scale
+            ) and previous.experienceBar.scale or defaults.experienceBar.scale,
+            width = type(previous.experienceBar) == "table"
+                and type(previous.experienceBar.width) == "number"
+                and math.max(240, math.min(720, math.floor(previous.experienceBar.width + 0.5)))
+                or defaults.experienceBar.width,
+            growUpwards = type(previous.experienceBar) ~= "table"
+                or previous.experienceBar.growUpwards ~= false,
+            showPlayer = type(previous.experienceBar) ~= "table"
+                or previous.experienceBar.showPlayer ~= false,
+            showPet = type(previous.experienceBar) ~= "table"
+                or previous.experienceBar.showPet ~= false,
+            showReputation = type(previous.experienceBar) ~= "table"
+                or previous.experienceBar.showReputation ~= false,
+            showRested = type(previous.experienceBar) ~= "table"
+                or previous.experienceBar.showRested ~= false,
+            playerColorMode = ReadProgressColorMode(
+                previous.experienceBar, "playerColorMode", "player"
+            ),
+            petColorMode = ReadProgressColorMode(
+                previous.experienceBar, "petColorMode", "pet"
+            ),
+            reputationColorMode = ReadProgressColorMode(
+                previous.experienceBar, "reputationColorMode", "reputation"
+            ),
+            playerTextMode = ReadProgressTextMode(previous.experienceBar, "playerTextMode"),
+            petTextMode = ReadProgressTextMode(previous.experienceBar, "petTextMode"),
+            reputationTextMode = ReadProgressTextMode(
+                previous.experienceBar, "reputationTextMode"
+            ),
+            customColors = ReadProgressCustomColors(previous.experienceBar),
+            position = type(previous.experienceBar) == "table"
+                and type(previous.experienceBar.position) == "table"
+                and type(previous.experienceBar.position[1]) == "number"
+                and type(previous.experienceBar.position[2]) == "number"
+                and { previous.experienceBar.position[1], previous.experienceBar.position[2] }
+                or nil,
+        },
         enable3DPortraits = previous.enable3DPortraits ~= false,
         mirrorPlayerTarget = type(previous.mirrorPlayerTarget) == "boolean"
             and previous.mirrorPlayerTarget or defaults.mirrorPlayerTarget,
+        groupLayoutsEnabled = previous.groupLayoutsEnabled == true,
+        groupLayouts = type(previous.groupLayouts) == "table"
+            and CopyTable(previous.groupLayouts) or nil,
         bossLayout = {
             growUpwards = type(previous.bossLayout) == "table"
                 and previous.bossLayout.growUpwards == true or defaults.bossLayout.growUpwards,
@@ -452,6 +634,7 @@ local function BuildProfile(self, previous)
         },
         positions = {},
         themePlacements = {},
+        themeSettings = {},
         frameSettings = {},
     }
 
@@ -465,8 +648,9 @@ local function BuildProfile(self, previous)
         self:ApplyPartyDisplayProfileOptions(database.partyLayout, database.partyLayout.displayProfile)
     end
 
-    -- Frame anchors, independently moved Raid groups, and cast bars are scoped
-    -- to their theme. Existing profiles migrate into the theme currently used.
+    -- Keep the legacy placement index for migration and for the movement code
+    -- that updates cast bars directly. Complete user option sets are scoped in
+    -- themeSettings below; existing profiles migrate into the active theme.
     if type(previous.themePlacements) == "table" then
         for themeId, placement in pairs(previous.themePlacements) do
             local theme = type(themeId) == "string" and self.themes[themeId]
@@ -543,8 +727,29 @@ local function BuildProfile(self, previous)
         end
     end
 
-    if self.InitializeActionsDatabase then
+    if not buildingThemeOptions and self.InitializeActionsDatabase then
         self:InitializeActionsDatabase(previous, database)
+    end
+
+    if not buildingThemeOptions then
+        -- Older releases kept only placement data per theme. The selected
+        -- theme's top-level values remain the migration source of truth, while
+        -- complete per-theme option sets from this schema are normalized with
+        -- the same validation as an ordinary profile.
+        if type(previous.themeSettings) == "table" then
+            for themeId, options in pairs(previous.themeSettings) do
+                if themeId ~= selectedThemeId and self.themes[themeId]
+                    and type(options) == "table" then
+                    local normalized = BuildProfile(
+                        self,
+                        ThemeOptionsProfileSource(themeId, options),
+                        true
+                    )
+                    database.themeSettings[themeId] = CaptureThemeOptions(normalized, false)
+                end
+            end
+        end
+        database.themeSettings[selectedThemeId] = CaptureThemeOptions(database, false)
     end
 
     return database
@@ -643,44 +848,65 @@ function PF:SetProfile(name)
     return true
 end
 
+function PF:SetThemeOption(key, value)
+    if not self.db then return end
+    self.db[key] = value
+    local options = self.db.themeSettings and self.db.themeSettings[self.db.theme]
+    if options then options[key] = value end
+end
+
 function PF:PrepareThemeChange(themeId)
     local theme = type(themeId) == "string" and self.themes[themeId]
     if not theme or not self.db then return false end
 
+    local currentThemeId = self.db.theme
     self.db.themePlacements = self.db.themePlacements or {}
-    local placement = self.db.themePlacements[themeId]
-    local sourcePlacement = self.db.themePlacements[self.db.theme]
-    if not placement then
-        -- The first visit to a theme starts exactly where the user left the
-        -- theme they are coming from. Later visits restore that theme's own
-        -- independently maintained placement.
-        placement = {
-            positions = CopyThemePositions(theme, self.db.positions),
-            groupOffsets = NormalizeRaidGroupOffsets(self.db.raidLayout and self.db.raidLayout.groupOffsets),
-            castBarPositions = CopyCastBarPositions(sourcePlacement and sourcePlacement.castBarPositions),
-        }
-        self.db.themePlacements[themeId] = placement
-    elseif not placement.castBarPositions then
-        -- Placements saved before cast bars became theme-aware are seeded on
-        -- their first visit under the new schema.
-        placement.castBarPositions = CopyCastBarPositions(
-            sourcePlacement and sourcePlacement.castBarPositions
+    self.db.themeSettings = self.db.themeSettings or {}
+
+    -- Scalar options (notably global scale) cannot remain linked to a theme
+    -- table by reference, so snapshot every active option immediately before
+    -- leaving. Nested option tables are intentionally retained as the active
+    -- theme's live storage.
+    self.db.themeSettings[currentThemeId] = CaptureThemeOptions(self.db, false)
+    self.db.themePlacements[currentThemeId] = {
+        positions = self.db.groupLayouts and self.db.groupLayouts.sharedPositions
+            or self.db.positions,
+        groupOffsets = self.db.raidLayout and self.db.raidLayout.groupOffsets,
+        castBarPositions = GetCastBarPositions(self.db.frameSettings),
+    }
+
+    local options = self.db.themeSettings[themeId]
+    if not options then
+        -- A theme receives a complete independent copy of the theme being
+        -- left on first use. Preserve placement-only data written by older
+        -- releases, if present, while migrating it into the complete set.
+        options = CaptureThemeOptions(self.db, true)
+        local oldPlacement = self.db.themePlacements[themeId]
+        options.positions = CopyThemePositions(
+            theme,
+            oldPlacement and oldPlacement.positions or self.db.positions
         )
-    end
-    if placement.positions and not placement.positions.targettarget
-        and self.db.positions and IsValidPosition(self.db.positions.targettarget) then
-        -- A theme placement may predate independent Target-of-Target support.
-        -- Seed that newly introduced coordinate from the theme being left.
-        placement.positions.targettarget = CopyPosition(self.db.positions.targettarget)
+        options.raidLayout.groupOffsets = NormalizeRaidGroupOffsets(
+            oldPlacement and oldPlacement.groupOffsets
+                or (self.db.raidLayout and self.db.raidLayout.groupOffsets)
+        )
+        local castBarPositions = CopyCastBarPositions(
+            oldPlacement and oldPlacement.castBarPositions
+                or GetCastBarPositions(self.db.frameSettings)
+        )
+        for key, setting in pairs(options.frameSettings or {}) do
+            setting.castBarPosition = castBarPositions[key]
+        end
+        self.db.themeSettings[themeId] = options
     end
 
+    ApplyThemeOptions(self.db, options)
     self.db.theme = themeId
-    self.db.positions = placement.positions
-    self.db.raidLayout.groupOffsets = placement.groupOffsets
-    placement.castBarPositions = placement.castBarPositions or {}
-    for key, setting in pairs(self.db.frameSettings or {}) do
-        setting.castBarPosition = placement.castBarPositions[key]
-    end
+    self.db.themePlacements[themeId] = {
+        positions = self.db.positions,
+        groupOffsets = self.db.raidLayout and self.db.raidLayout.groupOffsets,
+        castBarPositions = GetCastBarPositions(self.db.frameSettings),
+    }
     return true
 end
 

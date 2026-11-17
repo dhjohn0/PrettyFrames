@@ -443,7 +443,7 @@ function FrameBehaviors:AddContextMenus(rootDescription, subject, level)
 end
 
 local driver = CreateFrame("Frame")
-driver:RegisterEvent("PLAYER_REGEN_ENABLED")
+PF:RegisterEventSafe(driver, "PLAYER_REGEN_ENABLED")
 driver:SetScript("OnEvent", function()
     FrameBehaviors:FlushDeferred()
 end)

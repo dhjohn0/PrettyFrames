@@ -35,7 +35,7 @@ In particular:
 - Do not infer required colors, materials, rendering techniques, motifs, ornament density, lighting, or mood from existing assets.
 - Reuse an existing theme's PNG masks, widget coordinates, crops, or proportions
   only when the creator explicitly asks for a derivative or family variant.
-- Names such as `raidLeavesMaple`, `raidLeavesGolden`, `raidLeavesOak`, `raidLeavesAspen`, `raidTargetClasp`, and `castBarFrame` are stable API role identifiers. They do not require those depicted objects or any associated appearance.
+- Names such as `raidLeavesMaple`, `raidLeavesGolden`, `raidLeavesOak`, `raidLeavesAspen`, `raidTargetClasp`, and `castBarEndCap` are stable API role identifiers. They do not require those depicted objects or any associated appearance.
 - Technical words such as “frame,” “accent,” “ornament,” “clasp,” and “glow” describe placement or blending roles, not a required visual vocabulary.
 
 When the art-direction brief conflicts with an existing theme, follow the art
@@ -583,8 +583,8 @@ alpha shape. Give the role a descriptive, theme-agnostic name, map it in
 | `portraitBackground` | theme-defined; 256 x 256 recommended | Optional alpha-shaped texture behind live portrait models. When present, runtime uses its own alpha instead of applying the shared circular mask. Use it to prevent the 3D world from showing through a non-circular artwork opening; keep it to a dark background texture with no foreground rim or ornament. |
 | `portraitFrame` | 256 x 256 | Centered behind portraits at `portraitFrameScale`; circularly masked. Also reused as the background of Party role indicators. Keep important content centered and safe under a circular mask. |
 | `indicatorFrame` | 128 x 128 | Overlay ring for class and level indicators. It may be horizontally mirrored. The live icon or level field occupies the center. |
-| `castBarFrame` | 1024 x 128 | Ornament around custom cast bars and their previews, anchored by `ornamentPoint`. Display width is the live bar width plus the effective ornament extension; height is derived from `ornamentMinHeight` and `ornamentAspect`. Target and Focus may override the shared extension independently. Runtime places it on a sibling overlay so StatusBar fill animation cannot clip or remap its caps. Exterior and the bar opening require alpha. |
-| `castBarInterruptGlow` | 1024 x 128 | Additively blended interruptibility signal rendered above the live/preview StatusBar and ornament. It uses the same display dimensions and per-frame ornament extension as `castBarFrame`, but has its own `interruptGlowPoint`, `interruptGlowCrop`, and `interruptGlowAlpha`. Prefer an unmistakable exterior halo and cap blooms over thin internal rails that compete with the fill. Avoid opaque plates. |
+| `castBarEndCap` | 128 x 128 | One isolated left end cap for custom cast bars and their previews. Runtime places it at the left edge of the ornament holder and horizontally flips the same texture at the right edge. The canvas and all space around the cap require alpha. Never include rails, a center ornament, or a second cap. |
+| `castBarInterruptGlow` | 1024 x 128 | Additively blended interruptibility signal rendered above the live/preview StatusBar and end caps. It uses the complete ornament-holder dimensions and per-frame ornament extension, with its own `interruptGlowPoint`, `interruptGlowCrop`, and `interruptGlowAlpha`. Prefer an unmistakable exterior halo and cap blooms over thin internal rails that compete with the fill. Avoid opaque plates. |
 | `playerFrameWithPet` | 1024 x 512 | Unified Player-and-Pet artwork. Cropped by `player.withPetCrop`, displayed at `player.size[1] x player.withPetHeight`, and horizontally mirrored. Openings must align with Player and Pet widgets together. |
 | `playerFrameWithPetHealthOnly` | 1024 x 512 | Optional alternate unified artwork without a Pet-power opening. When supplied alongside Pet power geometry, the Pet right-click menu offers Health + Power and Health Only modes. It uses the same crop and geometry as `playerFrameWithPet`. |
 | `unitFrame` | 1024 x 512 | Shared two-bar art for standalone Player, Target, and Focus. Full frames use the same source; Focus scales it to a smaller logical size. Horizontally mirrored. |
@@ -716,6 +716,14 @@ single universal portrait setting.
 - `ornamentMinHeight`: minimum ornament display height.
 - `ornamentAspect`: ornament width divided by computed height when larger than the minimum.
 - `ornamentPoint`: decorative-frame anchor relative to the live bar. Its X/Y values move the complete ornament, including its caps.
+- `endCapScale`: optional multiplier applied to both square end-cap textures around their fixed outer-edge anchors.
+- `endCapBarScale`: optional cap-size multiplier based on the live bar height. It takes precedence over `endCapScale` and keeps the cap-to-bar proportion consistent across differently sized consumers.
+- `endCapOffsetX`: shared horizontal adjustment expressed as a fraction of final cap size. Positive values move caps outward; negative values pull them inward.
+- `endCapOffsetY`: optional vertical adjustment expressed as a fraction of the final cap size. Positive values move both caps upward while preserving their outer-edge anchors.
+- `castEndCapOffsetX`: optional cast-only override for `endCapOffsetX`.
+- `castEndCapOffsetY`: optional cast-only vertical adjustment expressed as a fraction of final cap size. It overrides `endCapOffsetY` for casting bars.
+- `progressEndCapBarScale`: optional progress-bar-only override for `endCapBarScale`, allowing XP, Pet XP, and reputation caps to retain a different proportion from casting bars.
+- `progressEndCapOffsetX`: optional progress-bar-only override for `endCapOffsetX`.
 - `interruptGlowPoint`: interrupt-glow anchor relative to the live bar, independent of the decorative frame. Negative Y moves the glow downward.
 - `interruptGlowCrop`: UV crop applied to the glow asset.
 - `interruptGlowAlpha`: additive opacity used for interruptible live casts and
@@ -752,7 +760,9 @@ ornament height = max(ornamentMinHeight, ornament width / ornamentAspect)
 6. The interrupt glow receives the same calculated width and height, including the Target/Focus override, then uses `interruptGlowPoint` instead of `ornamentPoint`. This permits small glow-only alignment changes. Positive Y moves up and negative Y moves down.
 7. `interruptGlowCrop = { left, right, top, bottom }` changes the UV region sampled from `castBarInterruptGlow`; it does not move or resize the glow frame. For a `1024 x 128` source, `{ 0.13, 0.87, 0, 1 }` removes approximately 133 source pixels from each horizontal side and keeps the full height. Including more transparent source padding generally makes the visible glow appear more inset; cropping away that padding makes it occupy more of the same display rectangle.
 
-Both live and preview ornaments must remain on sibling overlay frames, not as textures created directly on a `StatusBar`. Forever clips or remaps direct StatusBar child textures to animated progress, which makes end caps move with the fill. Preview geometry must use the known configured bar width when it is created; a preview anchored with `SetAllPoints` may not report its resolved width until a later layout pass.
+Custom live and preview bars share one ornament tree on a sibling overlay frame rather than maintaining parallel copies. Nameplate ornaments likewise remain on sibling overlays, never as textures created directly on a `StatusBar`. Forever clips or remaps direct StatusBar child textures to animated progress, which makes end caps move with the fill. Sharing the custom-bar ornament guarantees identical geometry, frame levels, and visibility behavior between live and test presentation.
+
+Place each end-cap texture inside an explicitly sized child frame and constrain it with `SetAllPoints`. Do not rely on sizing the texture region directly: some Forever clients preserve native texture dimensions, making theme scale or offset changes appear ineffective.
 
 The preview StatusBar renders one frame level above the live bar. When the live
 interrupt glow is reused for preview validation, raise it above both the
@@ -781,7 +791,7 @@ the interruptibility state unambiguous.
 - `marker`: raid-target marker `size` and `point`, relative to the health container. Anchor the marker's `BOTTOM` above the artwork's `TOP` to keep it clear of the decoration.
 
 The native bar reuses `layout.castBar` ornament geometry and the theme's
-`castBarFrame` and `castBarInterruptGlow` assets while Blizzard continues to
+`castBarEndCap` and `castBarInterruptGlow` assets while Blizzard continues to
 drive its combat state.
 
 The artwork and level text stay anchored to the health container, not the moved health bar. Name text and aura offsets currently remain runtime behavior rather than theme data; verify them visually if `artSize` changes substantially.
@@ -1180,7 +1190,8 @@ layout geometry.
 | optional `portraitBackground` | theme-defined; `256 x 256` recommended | Preserve alpha and keep the visible interior dark and free of foreground ornament. | Theme-wide `widgets.portraitBackgroundScaleX/Y/YOffset` plus supported Player, Pet, Party, unit-frame, and compact Target-of-Target overrides. |
 | `portraitFrame` | `256 x 256` | Preserve alpha; WoW applies the shared circular portrait mask. | Decoration inside the circular footprint and `widgets.portraitFrameScale`. |
 | `indicatorFrame` | `128 x 128` | Preserve a readable live center. | Decoration and `widgets.indicatorFrameScale`. |
-| `castBarFrame`, `castBarInterruptGlow` | `1024 x 128` | Preserve alpha and the 8:1 canvas. | Useful-alpha footprint, UV crops, points, aspect, minimum height, alpha, and extension fields. |
+| `castBarEndCap` | `128 x 128` | Preserve alpha and the square canvas. Store only the left cap; runtime mirrors it for the right. | Useful-alpha footprint, points, aspect, minimum height, and extension fields. |
+| `castBarInterruptGlow` | `1024 x 128` | Preserve alpha and the 8:1 canvas. | Useful-alpha footprint, UV crops, points, aspect, minimum height, alpha, and extension fields. |
 | `playerFrameWithPet` | `1024 x 512` | Preserve alpha and mirror-safe content. | `player.withPetCrop`, `size`, `withPetHeight`, and all Player/Pet points. |
 | `unitFrame`, `unitFrameOneBar` | `1024 x 512` | Paired states share a compatible canvas and transition. | `unitFrames.artCrop`, full/scaled sizes, one-bar heights, and widget points. |
 | `targetOfTargetFrame`, `targetOfTargetFrameOneBar` | `1024 x 512` | Paired states share a compatible canvas and stable shared openings; the one-bar lower silhouette may be more compact. | `unitFrames.targetOfTarget.artCrop` when present, otherwise `unitFrames.artCrop`; `targetOfTargetSize`, attachment, portrait/background overrides, bar heights, aura icon size, and widget points. |
@@ -1496,7 +1507,7 @@ Adjust `unitFrames.scaled` and test the full Target again because both use the s
 
 ### Cast-bar caps move with progress
 
-Cause: `castBarFrame` was created directly on a `StatusBar`, so Forever clipped or remapped it to the animated fill.
+Cause: the `castBarEndCap` textures were created directly on a `StatusBar`, so Forever clipped or remapped them to the animated fill.
 
 Keep both live and preview ornaments on sibling overlay frames anchored to their bars. Do not move the ornament texture back onto the StatusBar to simplify layering.
 
@@ -1508,7 +1519,7 @@ Create preview ornament geometry from the owning theme's known `castBarSize[1]`.
 
 ### Cast-bar caps are uniformly too far out or too far in
 
-Cause: the effective ornament extension does not match the transparent opening in `castBarFrame`.
+Cause: the effective ornament extension does not place the two `castBarEndCap` textures at the intended distance from the live bar.
 
 Adjust the owning frame's `castBarOrnamentExtraWidth` for Target or Focus. Adjust shared `layout.castBar.ornamentExtraWidth` for Player and other consumers. Do not change `castBarSize` unless the live bar itself also needs a different width.
 

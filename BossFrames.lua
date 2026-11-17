@@ -99,6 +99,8 @@ function PF:SaveBossFramePosition(frame)
     local x, y = frame:GetCenter()
     local parentX, parentY = UIParent:GetCenter()
     if not x or not y or not parentX or not parentY then return end
+    x, y = self:ConvertRegionCoordinatesToUIParent(frame, x, y)
+    if not x or not y then return end
     self.db.positions[frame.settingKey] = {
         "CENTER", "UIParent", "CENTER", x - parentX, y - parentY,
     }
@@ -179,6 +181,19 @@ function PF:PerformBossGroupLayout()
             frame:ClearAllPoints()
             frame:SetPoint("TOPLEFT", anchor, "TOPLEFT", 0, growUpwards and cursor or -cursor)
             cursor = cursor + step * (setting.scale or 1)
+        end
+    end
+
+    -- The top Boss frame owns a local OPTIONS plate at its top-left. Keep the
+    -- group MOVE plate one row above it so both controls remain clickable.
+    local topFrame = growUpwards and anchor.bossFrames[#anchor.bossFrames]
+        or anchor.bossFrames[1]
+    if anchor.moveHandle and topFrame then
+        anchor.moveHandle:ClearAllPoints()
+        if topFrame.moveHandle then
+            anchor.moveHandle:SetPoint("BOTTOMLEFT", topFrame.moveHandle, "TOPLEFT", 0, 5)
+        else
+            anchor.moveHandle:SetPoint("BOTTOMLEFT", topFrame, "TOPLEFT", 0, 5)
         end
     end
 

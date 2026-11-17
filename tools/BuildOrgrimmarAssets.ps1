@@ -272,7 +272,7 @@ $indicator = New-Canvas 128 128; Draw-Source $indicator 'IndicatorFrame'
 Clear-Ellipse $indicator 36 34 56 60
 Export-Canvas 'IndicatorFrame' $indicator
 
-Export-Source 'CastBarFrame' 1024 128 'Fit' 0
+Export-Source 'CastBarEndCap' 128 128 'Stretch' 0
 $castGlow = New-Canvas 1024 128; Draw-Source $castGlow 'CastBarInterruptGlow' 'Fit' 0
 Clear-Rectangle $castGlow 90 45 844 38
 Export-Canvas 'CastBarInterruptGlow' $castGlow

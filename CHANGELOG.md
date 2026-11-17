@@ -2,6 +2,13 @@
 
 All notable changes to PrettyFrames are documented here.
 
+## Unreleased
+
+### Added
+
+- Added optional Solo, Party, and Raid layouts with automatic, combat-safe switching.
+- Added an Edit Mode layout selector for previewing each group mode and resetting its positions to the current theme defaults.
+
 ## 1.0.1 - 2026-11-15
 
 ### Added

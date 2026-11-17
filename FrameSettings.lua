@@ -46,6 +46,13 @@ function PF:MirrorPlayerTargetPosition(sourceKey, savePosition)
     local parentTop = UIParent:GetTop()
     if not sourceX or not sourceTop or not parentX or not parentTop then return end
 
+    -- Region geometry is reported in the region's effective coordinate
+    -- space. Convert the source geometry into UIParent units before deriving
+    -- offsets; subtracting the raw values makes a globally scaled frame
+    -- (notably 60% on handheld layouts) mirror too high and too far inward.
+    sourceX, sourceTop = self:ConvertRegionCoordinatesToUIParent(source, sourceX, sourceTop)
+    if not sourceX or not sourceTop then return end
+
     other:ClearAllPoints()
     -- Mirror horizontal centers across the screen, but align the top edges.
     -- Player can include a Pet composition below its Player portion and is
@@ -60,19 +67,24 @@ end
 function PF:MakeMovable(frame, key)
     frame:SetMovable(true)
     frame:SetClampedToScreen(true)
-    frame:RegisterForDrag("LeftButton")
-    frame:SetScript("OnDragStart", function(widget)
-        if not self.db.locked and not InCombatLockdown() then
-            widget:StartMoving()
-            widget.mirrorPlayerTargetDragging = true
-        end
-    end)
-    frame:SetScript("OnDragStop", function(widget)
-        widget.mirrorPlayerTargetDragging = nil
-        widget:StopMovingOrSizing()
-        self:SavePosition(widget, key)
-        self:MirrorPlayerTargetPosition(key)
-    end)
+    local protected = frame.IsProtected and frame:IsProtected()
+    if not protected then
+        frame:RegisterForDrag("LeftButton")
+        frame:SetScript("OnDragStart", function(widget)
+            if not self.db.locked and not InCombatLockdown() then
+                widget:StartMoving()
+                widget.mirrorPlayerTargetDragging = true
+            end
+        end)
+        frame:SetScript("OnDragStop", function(widget)
+            if not widget.mirrorPlayerTargetDragging then return end
+            widget.mirrorPlayerTargetDragging = nil
+            if InCombatLockdown() then return end
+            widget:StopMovingOrSizing()
+            self:SavePosition(widget, key)
+            self:MirrorPlayerTargetPosition(key)
+        end)
+    end
     if key == "player" or key == "target" then
         frame:HookScript("OnUpdate", function(widget)
             if widget.mirrorPlayerTargetDragging then
@@ -111,7 +123,9 @@ function PF:MakeMovable(frame, key)
         end
     end)
     handle:SetScript("OnDragStop", function()
+        if not frame.mirrorPlayerTargetDragging then return end
         frame.mirrorPlayerTargetDragging = nil
+        if InCombatLockdown() then return end
         frame:StopMovingOrSizing()
         self:SavePosition(frame, key)
         self:MirrorPlayerTargetPosition(key)
@@ -257,6 +271,8 @@ function PF:SaveCastBarPosition(castBar)
     local x, y = castBar:GetCenter()
     local parentX, parentY = UIParent:GetCenter()
     if not x or not y or not parentX or not parentY then return end
+    x, y = self:ConvertRegionCoordinatesToUIParent(castBar, x, y)
+    if not x or not y then return end
     local position = { x - parentX, y - parentY }
     self:GetFrameSetting(owner.settingKey).castBarPosition = position
     local placements = self.db.themePlacements
@@ -287,6 +303,8 @@ function PF:SaveTargetTargetPosition(frame)
     local x, y = frame:GetCenter()
     local parentX, parentY = UIParent:GetCenter()
     if not x or not y or not parentX or not parentY then return end
+    x, y = self:ConvertRegionCoordinatesToUIParent(frame, x, y)
+    if not x or not y then return end
     self.db.positions.targettarget = {
         "CENTER", "UIParent", "CENTER", x - parentX, y - parentY,
     }
@@ -431,7 +449,7 @@ function PF:SetMirrorPlayerTarget(enabled)
         self:Print("Player/Target position mirroring cannot change during combat.")
         return false
     end
-    self.db.mirrorPlayerTarget = enabled == true
+    self:SetThemeOption("mirrorPlayerTarget", enabled == true)
     if self.db.mirrorPlayerTarget then
         self:MirrorPlayerTargetPosition("player")
     end
@@ -441,20 +459,42 @@ end
 function PF:RegisterFrameContextMenu(clickFrame, key, targetFrame)
     local target = targetFrame or clickFrame
     target.settingKey = key
-    clickFrame.contextTarget = target
-    clickFrame.prettyFramesContextActive = true
-    if not clickFrame.prettyFramesContextListed then
-        clickFrame.prettyFramesContextListed = true
-        table.insert(self.contextFrames, clickFrame)
+    -- Never open an insecure configuration menu from a secure unit button's
+    -- click handler. Forever can treat the rest of that hardware click as an
+    -- addon-owned protected unit action, producing the generic "only
+    -- available to the Blizzard UI" popup. Existing anchor frames already
+    -- have a plain MOVE plate; attached/individual frames receive a matching
+    -- OPTIONS plate while edit mode is active.
+    local menuHandle = clickFrame.moveHandle
+    if not menuHandle then
+        menuHandle = CreateFrame("Frame", nil, clickFrame, "BackdropTemplate")
+        menuHandle:SetSize(148, 22)
+        menuHandle:SetPoint("BOTTOMLEFT", clickFrame, "TOPLEFT", 0, 5)
+        self:RaiseEditHandle(menuHandle)
+        menuHandle:EnableMouse(true)
+        self:CreateBackdrop(menuHandle, 1)
+        menuHandle:SetBackdropColor(0.08, 0.045, 0.02, 0.96)
+        menuHandle.text = menuHandle:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        menuHandle.text:SetPoint("CENTER")
+        menuHandle.text:SetText("OPTIONS " .. key:upper())
+        menuHandle.text:SetTextColor(unpack(self.colors.bronzeBright))
+        menuHandle:Hide()
+        clickFrame.moveHandle = menuHandle
+        self.EditModeBehavior:AttachMovableFrame(clickFrame)
     end
-    if not clickFrame.prettyFramesContextHooked then
-        clickFrame.prettyFramesContextHooked = true
-        clickFrame:HookScript("OnClick", function(widget, mouseButton)
-            if widget.prettyFramesContextActive and mouseButton == "RightButton"
-                and PF.db and not PF.db.locked then
-                PF:OpenFrameContextMenu(widget)
-            end
-        end)
+    menuHandle.contextTarget = target
+    menuHandle.contextMenuLevel = menuHandle.contextMenuLevel or "move"
+    menuHandle.prettyFramesContextActive = true
+    menuHandle:SetScript("OnMouseUp", function(widget, mouseButton)
+        if widget.prettyFramesContextActive and mouseButton == "RightButton"
+            and PF.db and not PF.db.locked then
+            PF:OpenFrameContextMenu(widget)
+        end
+    end)
+    clickFrame.prettyFramesContextHandle = menuHandle
+    if not menuHandle.prettyFramesContextListed then
+        menuHandle.prettyFramesContextListed = true
+        table.insert(self.contextFrames, menuHandle)
     end
     if not target.contextRegistered then
         target.contextRegistered = true
@@ -471,12 +511,14 @@ end
 
 function PF:UnregisterFrameContextMenu(clickFrame, reason)
     if not clickFrame then return false end
-    local target = clickFrame.contextTarget or clickFrame
-    clickFrame.prettyFramesContextActive = nil
-    clickFrame.prettyFramesContextListed = nil
-    clickFrame.contextTarget = nil
+    local menuHandle = clickFrame.prettyFramesContextHandle or clickFrame
+    local target = menuHandle.contextTarget or clickFrame
+    menuHandle.prettyFramesContextActive = nil
+    menuHandle.prettyFramesContextListed = nil
+    menuHandle.contextTarget = nil
+    clickFrame.prettyFramesContextHandle = nil
     for index = #self.contextFrames, 1, -1 do
-        if self.contextFrames[index] == clickFrame then
+        if self.contextFrames[index] == menuHandle then
             table.remove(self.contextFrames, index)
             break
         end

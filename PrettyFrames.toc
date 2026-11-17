@@ -40,6 +40,7 @@ PetDisplayBehavior.lua
 ClassResourceBehavior.lua
 Actions.lua
 FrameSettings.lua
+GroupLayouts.lua
 ScaleBehavior.lua
 VisibilityBehavior.lua
 ActionsUI.lua
@@ -51,6 +52,7 @@ ClassResources.lua
 Auras.lua
 AuraIndicatorBehavior.lua
 CastBars.lua
+ExperienceBars.lua
 UnitFrameData.lua
 OrnateUnitFrames.lua
 PlayerFrame.lua
