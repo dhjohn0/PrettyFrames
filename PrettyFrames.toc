@@ -2,7 +2,7 @@
 ## Title: PrettyFrames
 ## Notes: Ornate, portrait-forward unit, party, and raid frames for WoW: Forever.
 ## Author: PrettyFrames
-## Version: 1.0.1
+## Version: 1.0.2
 ## SavedVariables: PrettyFramesDB
 ## AllowLoadGameType: standard, camelot, forever
 ## Dependencies: Blizzard_AuraContainer, Blizzard_NamePlates, Blizzard_UnitFrame, Blizzard_UIPanels_Game

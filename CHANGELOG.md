@@ -2,12 +2,25 @@
 
 All notable changes to PrettyFrames are documented here.
 
-## Unreleased
+## 1.0.2 - 2026-11-17
 
 ### Added
 
 - Added optional Solo, Party, and Raid layouts with automatic, combat-safe switching.
 - Added an Edit Mode layout selector for previewing each group mode and resetting its positions to the current theme defaults.
+- Added an optional themed replacement for Blizzard's experience bar, stacking Player XP, Pet XP, and watched Reputation with rested XP, tooltips, configurable text and colors, width, scale, and growth direction.
+
+### Improved
+
+- Saved scale, placement, frame-replacement, and display settings independently for each theme.
+- Replaced full cast-bar frames with compact mirrored end caps that stay aligned with live and preview bars.
+- Improved Forever compatibility for protected aura, cast, rune, and totem data; client-specific events; range checks; and Monk tank detection.
+
+### Fixed
+
+- Fixed frame option menus on secure unit buttons triggering Blizzard's protected-action warning.
+- Fixed moved frames and attached displays saving incorrect positions when UI or frame scaling was active.
+- Fixed overlapping Boss and Party Edit Mode handles.
 
 ## 1.0.1 - 2026-11-15
 

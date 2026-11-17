@@ -14,6 +14,7 @@ An ornate unit-frame replacement designed for **World of Warcraft: Forever** (`I
 - Leather-and-bronze Raid group headers with autumn leaf clusters above all five columns
 - Class/reaction-colored health and power bars
 - Per-frame health and power display controls for text format, bar color, background opacity, and bar sparks
+- An opt-in themed progress stack for Player XP, Pet XP, and watched Reputation, with rested XP, configurable text and colors, width, scale, and growth direction
 - Automatic one-bar artwork for units with no resource, including Forever NPCs whose 0/0 power maximum is protected
 - Configurable melee/ranged distance fading and out-of-range opacity for Boss, Party, Raid, and individual unit frames
 - Unlocked-frame right-click menus with persistent Always Show, Always Hide, and horizontal-flip controls
@@ -56,6 +57,7 @@ An ornate unit-frame replacement designed for **World of Warcraft: Forever** (`I
 - Safe handling of Forever's protected/secret combat values
 - Movable groups, global scaling, test mode, and optional Blizzard-frame suppression
 - Selectable themes whose art, texture crops, frame sizes, and art-aligned positions live together in human-editable configuration
+- Independent scale, placement, replacement, and display settings for each theme
 - Named configuration profiles with per-character selection, create, copy, rename, reset, and delete controls
 - Optional theme-specific Solo, Party, and Raid layouts, with an Edit Mode selector for previewing and resetting each mode
 
@@ -86,7 +88,7 @@ Action bindings are prepared outside combat and executed by the unit frames' sec
 - `Actions.lua` owns action profiles, validation, cursor parsing, and protected attributes; `ActionsUI.lua` owns the editor.
 - `FrameBehaviors.lua` and the `*Behavior.lua` modules provide reusable frame settings and displays, including movement, visibility, health/power presentation, range fading, threat, indicators, and context-menu behavior.
 - `FrameSettings.lua` coordinates saved frame settings, locking, and the shared behavior modules.
-- `FrameWidgets.lua`, `Auras.lua`, `CastBars.lua`, and `UnitFrameData.lua` provide shared frame components and data updates.
+- `FrameWidgets.lua`, `Auras.lua`, `CastBars.lua`, `ExperienceBars.lua`, and `UnitFrameData.lua` provide shared frame components, progress displays, and data updates.
 - `OrnateUnitFrames.lua`, `PlayerFrame.lua`, `BossFrames.lua`, `PartyFrames.lua`, and `RaidFrames.lua` own the individual frame families; `RaidFrameOptions.lua` owns Party and Raid display profiles plus Raid configuration menus.
 - `FrameController.lua` constructs the frame families after login.
 - `Nameplates.lua` and `Options.lua` remain independent entry points for their respective features.
